@@ -1,0 +1,18 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build
+bin/
+obj/
+
+# User-specific files
+*.user
+*.rsuser
+
+# ASP.NET
+appsettings.Development.json
+
+# Logs
+*.log
