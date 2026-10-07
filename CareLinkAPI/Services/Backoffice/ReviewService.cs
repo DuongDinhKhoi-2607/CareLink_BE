@@ -2,7 +2,7 @@ using CareLinkAPI.Common;
 using CareLinkAPI.Contracts.Auth;
 using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.DTOs.Backoffice;
-using CareLinkAPI.Entities.Feedback;
+using CareLinkAPI.Models;
 using CareLinkAPI.Repositories.Backoffice;
 
 namespace CareLinkAPI.Services.Backoffice;
@@ -45,9 +45,9 @@ public class ReviewService : IReviewService
 
         Review review;
 
-        if (booking.CustomerId == currentUserId)
+        if (booking.CustomerUserId == currentUserId)
         {
-            // Case 1: Caller is Customer -> Reviewing Nurse
+            // Case 1: Caller is Customer -> Reviewing Nurse (RevieweeId must be Nurse's User ID for FK to users.id)
             if (!dto.OverallRating.HasValue || dto.OverallRating.Value < 1 || dto.OverallRating.Value > 5)
             {
                 throw new ValidationException("Khách hàng bắt buộc phải chọn điểm đánh giá tổng quan (OverallRating từ 1 đến 5).");
@@ -58,7 +58,7 @@ public class ReviewService : IReviewService
                 Id = Guid.NewGuid(),
                 BookingId = bookingId,
                 ReviewerId = currentUserId,
-                RevieweeId = booking.NurseId,
+                RevieweeId = booking.NurseUserId, // users.id! Matches reviews.reviewee_id FK to users.id
                 ReviewerRole = (int)UserRole.Customer,
                 OverallRating = dto.OverallRating.Value,
                 Comment = dto.Comment?.Trim(),
@@ -67,12 +67,12 @@ public class ReviewService : IReviewService
                 PunctualityRating = dto.PunctualityRating,
                 CareQualityRating = dto.CareQualityRating,
                 WouldRehire = dto.WouldRehire,
-                CreatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTime.UtcNow
             };
         }
-        else if (booking.NurseId == currentUserId)
+        else if (booking.NurseUserId == currentUserId)
         {
-            // Case 2: Caller is Nurse -> Reviewing Customer
+            // Case 2: Caller is Nurse -> Reviewing Customer (RevieweeId must be Customer's User ID for FK to users.id)
             var respect = dto.RespectRating ?? 5;
             var safety = dto.SafetyRating ?? 5;
             var supplies = dto.SuppliesRating ?? 5;
@@ -85,7 +85,7 @@ public class ReviewService : IReviewService
                 Id = Guid.NewGuid(),
                 BookingId = bookingId,
                 ReviewerId = currentUserId,
-                RevieweeId = booking.CustomerId,
+                RevieweeId = booking.CustomerUserId, // users.id! Matches reviews.reviewee_id FK to users.id
                 ReviewerRole = (int)UserRole.Nurse,
                 OverallRating = calculatedOverall,
                 Comment = dto.Comment?.Trim(),
@@ -93,7 +93,7 @@ public class ReviewService : IReviewService
                 SafetyRating = safety,
                 SuppliesRating = supplies,
                 PaymentRating = payment,
-                CreatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTime.UtcNow
             };
         }
         else
@@ -112,8 +112,8 @@ public class ReviewService : IReviewService
         var booking = await _bookingQueryService.GetBookingContextAsync(dto.BookingId, ct)
             ?? throw new NotFoundException("Booking", dto.BookingId);
 
-        // Security check: Only customer of this booking can submit customer review
-        if (booking.CustomerId != currentUserId)
+        // Security check: Only customer user of this booking can submit customer review
+        if (booking.CustomerUserId != currentUserId)
         {
             throw new ForbiddenException("Chỉ khách hàng đã đặt ca chăm sóc mới có quyền gửi đánh giá điều dưỡng.");
         }
@@ -136,16 +136,16 @@ public class ReviewService : IReviewService
             Id = Guid.NewGuid(),
             BookingId = dto.BookingId,
             ReviewerId = currentUserId,
-            RevieweeId = booking.NurseId,
+            RevieweeId = booking.NurseUserId, // users.id!
             ReviewerRole = (int)UserRole.Customer,
-            OverallRating = dto.OverallRating, // Customer overall rating is independent!
+            OverallRating = dto.OverallRating,
             Comment = dto.Comment?.Trim(),
             ExpertiseRating = dto.ExpertiseRating,
             CommunicationRating = dto.CommunicationRating,
             PunctualityRating = dto.PunctualityRating,
             CareQualityRating = dto.CareQualityRating,
             WouldRehire = dto.WouldRehire,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTime.UtcNow
         };
 
         var created = await _reviewRepository.AddAsync(review, ct);
@@ -159,8 +159,8 @@ public class ReviewService : IReviewService
         var booking = await _bookingQueryService.GetBookingContextAsync(dto.BookingId, ct)
             ?? throw new NotFoundException("Booking", dto.BookingId);
 
-        // Security check: Only assigned nurse can submit nurse review
-        if (booking.NurseId != currentUserId)
+        // Security check: Only assigned nurse user can submit nurse review
+        if (booking.NurseUserId != currentUserId)
         {
             throw new ForbiddenException("Chỉ điều dưỡng được phân công vào ca mới có quyền gửi nhận xét gia đình khách hàng.");
         }
@@ -187,7 +187,7 @@ public class ReviewService : IReviewService
             Id = Guid.NewGuid(),
             BookingId = dto.BookingId,
             ReviewerId = currentUserId,
-            RevieweeId = booking.CustomerId,
+            RevieweeId = booking.CustomerUserId, // users.id!
             ReviewerRole = (int)UserRole.Nurse,
             OverallRating = calculatedOverall,
             Comment = dto.Comment?.Trim(),
@@ -195,7 +195,7 @@ public class ReviewService : IReviewService
             SafetyRating = dto.SafetyRating,
             SuppliesRating = dto.SuppliesRating,
             PaymentRating = dto.PaymentRating,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTime.UtcNow
         };
 
         var created = await _reviewRepository.AddAsync(review, ct);

@@ -1,6 +1,6 @@
 using CareLinkAPI.Common;
 using CareLinkAPI.DTOs.Backoffice;
-using CareLinkAPI.Entities.Catalog;
+using CareLinkAPI.Models;
 using CareLinkAPI.Repositories.Backoffice;
 
 namespace CareLinkAPI.Services.Backoffice;
@@ -36,7 +36,7 @@ public class ServiceCatalogService : IServiceCatalogService
     public async Task<ServiceResponseDto> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var service = await _serviceRepository.GetByIdAsync(id, ct)
-            ?? throw new NotFoundException(nameof(ServiceItem), id);
+            ?? throw new NotFoundException(nameof(Service), id);
 
         return MapToResponseDto(service);
     }
@@ -48,7 +48,7 @@ public class ServiceCatalogService : IServiceCatalogService
             throw new ConflictException($"Dịch vụ với tên '{dto.ServiceName}' đã tồn tại trong hệ thống.");
         }
 
-        var entity = new ServiceItem
+        var entity = new Service
         {
             Id = Guid.NewGuid(),
             ServiceName = dto.ServiceName.Trim(),
@@ -57,7 +57,7 @@ public class ServiceCatalogService : IServiceCatalogService
             BasePrice = dto.BasePrice,
             DurationMinutes = dto.DurationMinutes,
             IsActive = true,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTime.UtcNow
         };
 
         var created = await _serviceRepository.AddAsync(entity, ct);
@@ -67,7 +67,7 @@ public class ServiceCatalogService : IServiceCatalogService
     public async Task<ServiceResponseDto> UpdateServiceAsync(Guid id, UpdateServiceDto dto, CancellationToken ct = default)
     {
         var entity = await _serviceRepository.GetByIdAsync(id, ct)
-            ?? throw new NotFoundException(nameof(ServiceItem), id);
+            ?? throw new NotFoundException(nameof(Service), id);
 
         if (await _serviceRepository.ExistsByNameAsync(dto.ServiceName, id, ct))
         {
@@ -87,14 +87,14 @@ public class ServiceCatalogService : IServiceCatalogService
     public async Task<ServiceResponseDto> SetServiceStatusAsync(Guid id, bool isActive, CancellationToken ct = default)
     {
         var entity = await _serviceRepository.GetByIdAsync(id, ct)
-            ?? throw new NotFoundException(nameof(ServiceItem), id);
+            ?? throw new NotFoundException(nameof(Service), id);
 
         entity.IsActive = isActive;
         await _serviceRepository.UpdateAsync(entity, ct);
         return MapToResponseDto(entity);
     }
 
-    private static ServiceResponseDto MapToResponseDto(ServiceItem s) => new()
+    private static ServiceResponseDto MapToResponseDto(Service s) => new()
     {
         Id = s.Id,
         ServiceName = s.ServiceName,

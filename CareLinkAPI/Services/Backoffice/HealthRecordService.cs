@@ -2,7 +2,7 @@ using CareLinkAPI.Common;
 using CareLinkAPI.Contracts.Auth;
 using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.DTOs.Backoffice;
-using CareLinkAPI.Entities.Clinical;
+using CareLinkAPI.Models;
 using CareLinkAPI.Repositories.Backoffice;
 
 namespace CareLinkAPI.Services.Backoffice;
@@ -30,8 +30,8 @@ public class HealthRecordService : IHealthRecordService
         var booking = await _bookingQueryService.GetBookingContextAsync(bookingId, ct)
             ?? throw new NotFoundException("Booking", bookingId);
 
-        // Security check: Only assigned Nurse can create health record
-        if (booking.NurseId != currentUserId && !_currentUserService.IsAdmin)
+        // Security check: Only assigned Nurse can create health record (compares JWT user_id with NurseUserId)
+        if (booking.NurseUserId != currentUserId && !_currentUserService.IsAdmin)
         {
             throw new ForbiddenException("Chỉ điều dưỡng được phân công vào ca chăm sóc mới có quyền tạo bệnh án.");
         }
@@ -61,7 +61,7 @@ public class HealthRecordService : IHealthRecordService
             MobilityStatus = dto.MobilityStatus?.Trim(),
             MentalStatus = dto.MentalStatus?.Trim(),
             NurseNotes = dto.NurseNotes?.Trim(),
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTime.UtcNow
         };
 
         var created = await _healthRecordRepository.AddAsync(entity, ct);
@@ -75,7 +75,7 @@ public class HealthRecordService : IHealthRecordService
         var booking = await _bookingQueryService.GetBookingContextAsync(bookingId, ct)
             ?? throw new NotFoundException("Booking", bookingId);
 
-        if (booking.NurseId != currentUserId && !_currentUserService.IsAdmin)
+        if (booking.NurseUserId != currentUserId && !_currentUserService.IsAdmin)
         {
             throw new ForbiddenException("Chỉ điều dưỡng được phân công vào ca chăm sóc mới có quyền chỉnh sửa bệnh án.");
         }
@@ -110,7 +110,7 @@ public class HealthRecordService : IHealthRecordService
             ?? throw new NotFoundException("Booking", bookingId);
 
         // Security check: Caller must be Customer, Nurse of booking, or Admin
-        if (booking.CustomerId != currentUserId && booking.NurseId != currentUserId && !_currentUserService.IsAdmin)
+        if (booking.CustomerUserId != currentUserId && booking.NurseUserId != currentUserId && !_currentUserService.IsAdmin)
         {
             throw new ForbiddenException("Bạn không có quyền truy cập thông tin bệnh án của ca chăm sóc này.");
         }

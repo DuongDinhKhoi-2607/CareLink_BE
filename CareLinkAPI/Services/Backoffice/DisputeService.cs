@@ -3,7 +3,7 @@ using CareLinkAPI.Contracts.Auth;
 using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.Contracts.Payment;
 using CareLinkAPI.DTOs.Backoffice;
-using CareLinkAPI.Entities.Feedback;
+using CareLinkAPI.Models;
 using CareLinkAPI.Repositories.Backoffice;
 
 namespace CareLinkAPI.Services.Backoffice;
@@ -34,8 +34,8 @@ public class DisputeService : IDisputeService
         var booking = await _bookingQueryService.GetBookingContextAsync(bookingId, ct)
             ?? throw new NotFoundException("Booking", bookingId);
 
-        // Security check: Customer can only dispute their own booking
-        if (booking.CustomerId != currentUserId && !_currentUserService.IsAdmin)
+        // Security check: Customer can only dispute their own booking (CustomerUserId matches JWT user)
+        if (booking.CustomerUserId != currentUserId && !_currentUserService.IsAdmin)
         {
             throw new ForbiddenException("Chỉ khách hàng sở hữu ca chăm sóc mới có quyền gửi khiếu nại.");
         }
@@ -51,13 +51,13 @@ public class DisputeService : IDisputeService
         {
             Id = Guid.NewGuid(),
             BookingId = bookingId,
-            CustomerId = currentUserId,
+            CustomerId = booking.CustomerId, // customers.id! Matches disputes.customer_id FK to customers.id
             Reason = dto.Reason.Trim(),
             Description = dto.Description?.Trim(),
             EvidenceUrls = dto.EvidenceUrls ?? new List<string>(),
             Status = (int)DisputeStatus.Open,
             RefundAmount = 0,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTime.UtcNow
         };
 
         var created = await _disputeRepository.AddAsync(dispute, ct);
@@ -114,7 +114,7 @@ public class DisputeService : IDisputeService
 
         dispute.ResolutionNote = dto.ResolutionNote?.Trim();
         dispute.ResolvedBy = currentUserId;
-        dispute.ResolvedAt = DateTimeOffset.UtcNow;
+        dispute.ResolvedAt = DateTime.UtcNow;
 
         await _disputeRepository.UpdateAsync(dispute, ct);
         return MapToResponseDto(dispute);
@@ -127,9 +127,13 @@ public class DisputeService : IDisputeService
         var dispute = await _disputeRepository.GetByIdAsync(id, ct)
             ?? throw new NotFoundException(nameof(Dispute), id);
 
-        if (dispute.CustomerId != currentUserId && !_currentUserService.IsAdmin)
+        if (!_currentUserService.IsAdmin)
         {
-            throw new ForbiddenException("Bạn không có quyền truy cập thông tin khiếu nại này.");
+            var booking = await _bookingQueryService.GetBookingContextAsync(dispute.BookingId, ct);
+            if (booking != null && booking.CustomerUserId != currentUserId)
+            {
+                throw new ForbiddenException("Bạn không có quyền truy cập thông tin khiếu nại này.");
+            }
         }
 
         return MapToResponseDto(dispute);

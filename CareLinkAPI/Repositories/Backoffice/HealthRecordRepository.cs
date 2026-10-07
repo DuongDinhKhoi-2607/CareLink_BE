@@ -1,5 +1,4 @@
-using CareLinkAPI.Data;
-using CareLinkAPI.Entities.Clinical;
+using CareLinkAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace CareLinkAPI.Repositories.Backoffice;

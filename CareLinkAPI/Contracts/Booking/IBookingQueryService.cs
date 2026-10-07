@@ -3,7 +3,9 @@ namespace CareLinkAPI.Contracts.Booking;
 public record BookingContextDto(
     Guid BookingId,
     Guid CustomerId,
+    Guid CustomerUserId,
     Guid NurseId,
+    Guid NurseUserId,
     Guid RecipientId,
     int Status,
     DateTimeOffset ScheduledStart,

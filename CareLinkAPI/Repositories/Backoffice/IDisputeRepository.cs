@@ -1,5 +1,5 @@
 using CareLinkAPI.Common;
-using CareLinkAPI.Entities.Feedback;
+using CareLinkAPI.Models;
 
 namespace CareLinkAPI.Repositories.Backoffice;
 

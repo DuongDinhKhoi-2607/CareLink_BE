@@ -1,6 +1,5 @@
 using CareLinkAPI.Common;
-using CareLinkAPI.Data;
-using CareLinkAPI.Entities.Catalog;
+using CareLinkAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace CareLinkAPI.Repositories.Backoffice;
@@ -14,12 +13,12 @@ public class ServiceRepository : IServiceRepository
         _db = db;
     }
 
-    public async Task<ServiceItem?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    public async Task<Service?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         return await _db.Services.FirstOrDefaultAsync(s => s.Id == id, ct);
     }
 
-    public async Task<IReadOnlyList<ServiceItem>> GetAllActiveAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<Service>> GetAllActiveAsync(CancellationToken ct = default)
     {
         return await _db.Services
             .AsNoTracking()
@@ -28,7 +27,7 @@ public class ServiceRepository : IServiceRepository
             .ToListAsync(ct);
     }
 
-    public async Task<PagedResult<ServiceItem>> GetAllPagedAsync(
+    public async Task<PagedResult<Service>> GetAllPagedAsync(
         int pageNumber,
         int pageSize,
         bool? isActive = null,
@@ -57,7 +56,7 @@ public class ServiceRepository : IServiceRepository
             .Take(pageSize)
             .ToListAsync(ct);
 
-        return new PagedResult<ServiceItem>(items, totalCount, pageNumber, pageSize);
+        return new PagedResult<Service>(items, totalCount, pageNumber, pageSize);
     }
 
     public async Task<bool> ExistsByNameAsync(string serviceName, Guid? excludeId = null, CancellationToken ct = default)
@@ -73,14 +72,14 @@ public class ServiceRepository : IServiceRepository
         return await query.AnyAsync(ct);
     }
 
-    public async Task<ServiceItem> AddAsync(ServiceItem service, CancellationToken ct = default)
+    public async Task<Service> AddAsync(Service service, CancellationToken ct = default)
     {
         await _db.Services.AddAsync(service, ct);
         await _db.SaveChangesAsync(ct);
         return service;
     }
 
-    public async Task UpdateAsync(ServiceItem service, CancellationToken ct = default)
+    public async Task UpdateAsync(Service service, CancellationToken ct = default)
     {
         _db.Services.Update(service);
         await _db.SaveChangesAsync(ct);
