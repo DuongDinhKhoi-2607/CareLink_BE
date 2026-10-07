@@ -1,4 +1,4 @@
-using CareLinkAPI.Entities.Catalog;
+using CareLinkAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace CareLinkAPI.Data;
@@ -14,7 +14,7 @@ public static class DbInitializer
             {
                 logger.LogInformation("Seeding default services into database...");
 
-                var defaultServices = new List<ServiceItem>
+                var defaultServices = new List<Service>
                 {
                     new()
                     {
@@ -25,7 +25,7 @@ public static class DbInitializer
                         BasePrice = 200000m,
                         DurationMinutes = 120,
                         IsActive = true,
-                        CreatedAt = DateTimeOffset.UtcNow
+                        CreatedAt = DateTime.UtcNow
                     },
                     new()
                     {
@@ -36,7 +36,7 @@ public static class DbInitializer
                         BasePrice = 350000m,
                         DurationMinutes = 180,
                         IsActive = true,
-                        CreatedAt = DateTimeOffset.UtcNow
+                        CreatedAt = DateTime.UtcNow
                     },
                     new()
                     {
@@ -47,7 +47,7 @@ public static class DbInitializer
                         BasePrice = 150000m,
                         DurationMinutes = 60,
                         IsActive = true,
-                        CreatedAt = DateTimeOffset.UtcNow
+                        CreatedAt = DateTime.UtcNow
                     },
                     new()
                     {
@@ -58,7 +58,7 @@ public static class DbInitializer
                         BasePrice = 300000m,
                         DurationMinutes = 240,
                         IsActive = true,
-                        CreatedAt = DateTimeOffset.UtcNow
+                        CreatedAt = DateTime.UtcNow
                     },
                     new()
                     {
@@ -69,7 +69,7 @@ public static class DbInitializer
                         BasePrice = 250000m,
                         DurationMinutes = 180,
                         IsActive = true,
-                        CreatedAt = DateTimeOffset.UtcNow
+                        CreatedAt = DateTime.UtcNow
                     }
                 };
 

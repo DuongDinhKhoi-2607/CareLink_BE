@@ -1,5 +1,6 @@
 using CareLinkAPI.Data;
 using CareLinkAPI.Extensions;
+using CareLinkAPI.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,9 +45,12 @@ app.MapControllers();
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<CareLinkDbContext>();
+    var context = scope.ServiceProvider.GetService<CareLinkDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    await DbInitializer.SeedAsync(context, logger);
+    if (context != null)
+    {
+        await DbInitializer.SeedAsync(context, logger);
+    }
 }
 
 app.Run();

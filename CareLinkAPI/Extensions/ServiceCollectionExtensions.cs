@@ -1,9 +1,7 @@
 using CareLinkAPI.Common;
 using CareLinkAPI.Contracts.Auth;
-using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.Contracts.Clinical;
-using CareLinkAPI.Contracts.Payment;
-using CareLinkAPI.Data;
+using CareLinkAPI.Models;
 using CareLinkAPI.Repositories.Backoffice;
 using CareLinkAPI.Services.Auth;
 using CareLinkAPI.Services.Backoffice;
@@ -16,12 +14,14 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddCareLinkInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection") 
-            ?? "Host=localhost;Database=carelink;Username=postgres;Password=postgres";
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
 
         services.AddDbContext<CareLinkDbContext>(options =>
         {
-            options.UseNpgsql(connectionString);
+            if (!string.IsNullOrEmpty(connectionString))
+            {
+                options.UseNpgsql(connectionString);
+            }
         });
 
         services.AddHttpContextAccessor();
