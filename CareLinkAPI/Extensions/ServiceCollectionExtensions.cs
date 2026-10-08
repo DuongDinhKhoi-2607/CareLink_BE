@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<IDisputeRepository, DisputeRepository>();
+        services.AddScoped<IHandbookRepository, HandbookRepository>();
 
         return services;
     }
@@ -49,6 +50,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReviewService, ReviewService>();
         services.AddScoped<IDisputeService, DisputeService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
+        services.AddScoped<IHandbookService, HandbookService>();
 
         return services;
     }
