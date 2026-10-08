@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using CareLinkAPI.BackgroundJobs;
@@ -7,7 +8,10 @@ using CareLinkAPI.Data;
 using CareLinkAPI.Extensions;
 using CareLinkAPI.Middlewares;
 using CareLinkAPI.Models;
+using CareLinkAPI.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,6 +29,44 @@ builder.Services.AddDbContext<CareLinkDbContext>(options =>
 // Options
 builder.Services.Configure<BookingOptions>(builder.Configuration.GetSection(BookingOptions.SectionName));
 
+// JWT Authentication
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (!string.IsNullOrEmpty(jwtKey))
+{
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+}
+else
+{
+    builder.Services.AddAuthentication();
+}
+
+builder.Services.AddAuthorization();
+
+// CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+});
+
 // Infrastructure, Repositories, Services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCareLinkRepositories();
@@ -41,14 +83,24 @@ builder.Services.AddControllers()
 // OpenAPI / Swagger
 builder.Services.AddOpenApi(options =>
 {
-    // Lets Swagger UI send the Development-only X-User-Id header (see ControllerBaseExtensions).
+    // Lets Swagger UI send Bearer token and the Development-only X-User-Id header.
     options.AddDocumentTransformer((document, _, _) =>
     {
-        const string schemeId = "DevelopmentUser";
+        const string bearerSchemeId = "Bearer";
+        const string devSchemeId = "DevelopmentUser";
 
         document.Components ??= new OpenApiComponents();
         document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
-        document.Components.SecuritySchemes[schemeId] = new OpenApiSecurityScheme
+
+        document.Components.SecuritySchemes[bearerSchemeId] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "JWT Authorization header using the Bearer scheme. Enter your JWT token."
+        };
+
+        document.Components.SecuritySchemes[devSchemeId] = new OpenApiSecurityScheme
         {
             Type = SecuritySchemeType.ApiKey,
             In = ParameterLocation.Header,
@@ -60,7 +112,11 @@ builder.Services.AddOpenApi(options =>
         [
             new OpenApiSecurityRequirement
             {
-                [new OpenApiSecuritySchemeReference(schemeId, document)] = []
+                [new OpenApiSecuritySchemeReference(bearerSchemeId, document)] = []
+            },
+            new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference(devSchemeId, document)] = []
             }
         ];
 
@@ -105,7 +161,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

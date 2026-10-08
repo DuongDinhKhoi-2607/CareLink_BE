@@ -41,6 +41,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentQueryService, PaymentQueryService>();
 
         // Domain & Application Services
+        services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<INurseSearchService, NurseSearchService>();
         services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
