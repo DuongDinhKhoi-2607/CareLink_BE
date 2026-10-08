@@ -15,10 +15,10 @@ public class ReviewsController : ControllerBase
         _reviewService = reviewService;
     }
 
-    /// <summary>
-    /// Đánh giá ca chăm sóc 2 chiều (POST /api/v1/bookings/{bookingId}/reviews)
-    /// Hệ thống tự xác định Reviewer và Reviewee dựa trên JWT User và Booking context (Khách <-> Điều dưỡng)
-    /// </summary>
+    /// <summary>Gửi đánh giá ca chăm sóc 2 chiều (Khách hàng và Điều dưỡng).</summary>
+    /// <remarks>
+    /// Hệ thống tự xác định Reviewer và Reviewee dựa trên JWT User và Booking context (Khách hàng và Điều dưỡng).
+    /// </remarks>
     [HttpPost("api/v1/bookings/{bookingId:guid}/reviews")]
     public async Task<ActionResult<ReviewResponseDto>> SubmitReview(
         [FromRoute] Guid bookingId,
