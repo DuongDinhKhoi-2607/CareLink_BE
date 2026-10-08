@@ -134,9 +134,9 @@ PUT    /api/v1/notifications/{id}/read          ← BỔ SUNG MỚI
 
 | ID | Mức độ | Trạng thái | Mô tả |
 |---|---|---|---|
-| Search-01 | 🔴 MUST | ❌ | Lọc Nurse theo Quận/Huyện, Dịch vụ hỗ trợ và Đánh giá trung bình |
-| Search-02 | 🔴 MUST | ❌ | Thuật toán tính khoảng cách địa lý **(Haversine Formula)** ưu tiên Nurse ở gần |
-| Search-03 | 🔴 MUST | ❌ | Kiểm tra trùng lịch: Lọc Nurse đã có ca trong khung giờ hoặc chưa cấu hình Availability |
+| Search-01 | 🔴 MUST | ✅ | Lọc Nurse theo Quận/Huyện, Dịch vụ hỗ trợ và Đánh giá trung bình |
+| Search-02 | 🔴 MUST | ✅ | Thuật toán tính khoảng cách địa lý **(Haversine Formula)** ưu tiên Nurse ở gần |
+| Search-03 | 🔴 MUST | ✅ | Kiểm tra trùng lịch: Lọc Nurse đã có ca trong khung giờ hoặc chưa cấu hình Availability |
 
 ---
 
@@ -144,14 +144,14 @@ PUT    /api/v1/notifications/{id}/read          ← BỔ SUNG MỚI
 
 | ID | Mức độ | Trạng thái | Mô tả |
 |---|---|---|---|
-| Book-01 | 🔴 MUST | ❌ | Khách hàng khởi tạo lịch đặt mới → trạng thái `PendingPayment` |
-| Book-02 | 🔴 MUST | ❌ | **State Machine** kiểm soát chặt luồng trạng thái (xem sơ đồ bên dưới) |
-| Book-03a | 🔴 MUST | ❌ | Nurse **Accept** ca → `Accepted` |
-| Book-03b | 🔴 MUST | ❌ | Nurse **Reject** ca → hoàn trả slot, thông báo Customer |
-| Book-04 | 🔴 MUST | ❌ | Nurse bấm **Check-in / Start** → `InProgress` |
-| Book-05 | 🔴 MUST | ❌ | Nurse bấm **Finish** sau khi nộp báo cáo y tế → `Completed` |
-| Book-06 | 🔴 MUST | ❌ | Logic **Hủy lịch**: quy định phạt cọc/hoàn tiền theo thời điểm hủy |
-| Book-07 | 🟠 SHOULD | ❌ | **Auto-Reject**: Nurse không Accept trong 30 phút → tự động Reject, thông báo Customer |
+| Book-01 | 🔴 MUST | ✅ | Khách hàng khởi tạo lịch đặt mới → trạng thái `PendingPayment` |
+| Book-02 | 🔴 MUST | ✅ | **State Machine** kiểm soát chặt luồng trạng thái (xem sơ đồ bên dưới) |
+| Book-03a | 🔴 MUST | ✅ | Nurse **Accept** ca → `Accepted` |
+| Book-03b | 🔴 MUST | ✅ | Nurse **Reject** ca → hoàn trả slot, thông báo Customer |
+| Book-04 | 🔴 MUST | ✅ | Nurse bấm **Check-in / Start** → `InProgress` |
+| Book-05 | 🔴 MUST | ✅ | Nurse bấm **Finish** sau khi nộp báo cáo y tế → `Completed` |
+| Book-06 | 🔴 MUST | ✅ | Logic **Hủy lịch**: quy định phạt cọc/hoàn tiền theo thời điểm hủy |
+| Book-07 | 🟠 SHOULD | ✅ | **Auto-Reject**: Nurse không Accept trong 30 phút → tự động Reject, thông báo Customer |
 
 **State Machine đầy đủ:**
 ```
