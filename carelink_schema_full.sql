@@ -335,64 +335,33 @@ CREATE TABLE public.health_records (
 -- MODULE 11: REVIEWS, RATINGS & DISPUTES
 -- ============================================================
 
--- Rev-01, Rev-02
--- Reviews 2 chiều: Customer <-> Nurse
+-- Rev-01, Rev-02 (2-way Reviews: Customer <-> Nurse)
 CREATE TABLE public.reviews (
     id                      UUID        NOT NULL DEFAULT gen_random_uuid(),
     booking_id              UUID        NOT NULL,
     reviewer_id             UUID        NOT NULL,
     reviewee_id             UUID        NOT NULL,
-    reviewer_role           INTEGER     NOT NULL
-                            CHECK (reviewer_role IN (2, 3)),
-                            -- 2=Customer | 3=Nurse
-
-    overall_rating          NUMERIC(2, 1) NOT NULL
-                            CHECK (overall_rating >= 1 AND overall_rating <= 5),
-
+    reviewer_role           INTEGER     NOT NULL CHECK (reviewer_role IN (2, 3)), -- 2=Customer, 3=Nurse
+    overall_rating          NUMERIC(2, 1) NOT NULL CHECK (overall_rating >= 1 AND overall_rating <= 5),
     comment                 TEXT,
-
-    -- Customer đánh giá Nurse
-    expertise_rating        INTEGER
-                            CHECK (expertise_rating BETWEEN 1 AND 5),
-    communication_rating    INTEGER
-                            CHECK (communication_rating BETWEEN 1 AND 5),
-    punctuality_rating      INTEGER
-                            CHECK (punctuality_rating BETWEEN 1 AND 5),
-    care_quality_rating     INTEGER
-                            CHECK (care_quality_rating BETWEEN 1 AND 5),
+    expertise_rating        INTEGER     CHECK (expertise_rating BETWEEN 1 AND 5),
+    communication_rating    INTEGER     CHECK (communication_rating BETWEEN 1 AND 5),
+    punctuality_rating      INTEGER     CHECK (punctuality_rating BETWEEN 1 AND 5),
+    care_quality_rating     INTEGER     CHECK (care_quality_rating BETWEEN 1 AND 5),
     would_rehire            BOOLEAN,
-
-    -- Nurse đánh giá Customer
-    respect_rating          INTEGER
-                            CHECK (respect_rating BETWEEN 1 AND 5),
-    safety_rating           INTEGER
-                            CHECK (safety_rating BETWEEN 1 AND 5),
-    supplies_rating         INTEGER
-                            CHECK (supplies_rating BETWEEN 1 AND 5),
-    payment_rating          INTEGER
-                            CHECK (payment_rating BETWEEN 1 AND 5),
-
+    respect_rating          INTEGER     CHECK (respect_rating BETWEEN 1 AND 5),
+    safety_rating           INTEGER     CHECK (safety_rating BETWEEN 1 AND 5),
+    supplies_rating         INTEGER     CHECK (supplies_rating BETWEEN 1 AND 5),
+    payment_rating          INTEGER     CHECK (payment_rating BETWEEN 1 AND 5),
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-    CONSTRAINT reviews_pkey
-        PRIMARY KEY (id),
-
-    -- Mỗi người chỉ được review một lần cho một booking
-    CONSTRAINT reviews_booking_reviewer_unique
-        UNIQUE (booking_id, reviewer_id),
-
-    CONSTRAINT fk_review_booking
-        FOREIGN KEY (booking_id)
-        REFERENCES public.bookings(id),
-
-    CONSTRAINT fk_review_reviewer
-        FOREIGN KEY (reviewer_id)
-        REFERENCES public.users(id),
-
-    CONSTRAINT fk_review_reviewee
-        FOREIGN KEY (reviewee_id)
-        REFERENCES public.users(id)
+    CONSTRAINT reviews_pkey PRIMARY KEY (id),
+    CONSTRAINT reviews_booking_reviewer_unique UNIQUE (booking_id, reviewer_id),
+    CONSTRAINT reviews_no_self_review CHECK (reviewer_id <> reviewee_id),
+    CONSTRAINT fk_review_booking FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
+    CONSTRAINT fk_review_reviewer FOREIGN KEY (reviewer_id) REFERENCES public.users(id),
+    CONSTRAINT fk_review_reviewee FOREIGN KEY (reviewee_id) REFERENCES public.users(id)
 );
+
 
 -- Rev-03, Rev-04
 CREATE TABLE public.disputes (
