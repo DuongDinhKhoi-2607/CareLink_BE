@@ -1,7 +1,8 @@
-using CareLinkAPI.Common;
+using CareLinkAPI.Common.Exceptions;
+using CareLinkAPI.Common.Models;
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Models;
-using CareLinkAPI.Repositories.Backoffice;
+using CareLinkAPI.Repositories;
 
 namespace CareLinkAPI.Services.Backoffice;
 

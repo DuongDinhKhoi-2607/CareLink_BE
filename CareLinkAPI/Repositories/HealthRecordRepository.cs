@@ -1,7 +1,7 @@
 using CareLinkAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace CareLinkAPI.Repositories.Backoffice;
+namespace CareLinkAPI.Repositories;
 
 public class HealthRecordRepository : IHealthRecordRepository
 {
@@ -24,7 +24,7 @@ public class HealthRecordRepository : IHealthRecordRepository
 
     public async Task<bool> ExistsForBookingAsync(Guid bookingId, CancellationToken ct = default)
     {
-        return await _db.HealthRecords.AnyAsync(h => h.BookingId == bookingId, ct);
+        return await _db.HealthRecords.AsNoTracking().AnyAsync(h => h.BookingId == bookingId, ct);
     }
 
     public async Task<IReadOnlyList<HealthRecord>> GetByBookingIdsAsync(IEnumerable<Guid> bookingIds, CancellationToken ct = default)

@@ -1,4 +1,4 @@
-using CareLinkAPI.Common;
+using CareLinkAPI.Common.Models;
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Services.Backoffice;
 using Microsoft.AspNetCore.Mvc;

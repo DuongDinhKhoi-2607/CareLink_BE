@@ -1,8 +1,9 @@
-using CareLinkAPI.Common;
+using CareLinkAPI.Common.Enums;
+using CareLinkAPI.Common.Models;
 using CareLinkAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace CareLinkAPI.Repositories.Backoffice;
+namespace CareLinkAPI.Repositories;
 
 public class DisputeRepository : IDisputeRepository
 {

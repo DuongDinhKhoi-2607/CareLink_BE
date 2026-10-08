@@ -1,9 +1,11 @@
-using CareLinkAPI.Common;
+using CareLinkAPI.Common.Enums;
+using CareLinkAPI.Common.Exceptions;
+using CareLinkAPI.Common.Models;
 using CareLinkAPI.Contracts.Auth;
 using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Models;
-using CareLinkAPI.Repositories.Backoffice;
+using CareLinkAPI.Repositories;
 
 namespace CareLinkAPI.Services.Backoffice;
 

@@ -1,4 +1,4 @@
-using CareLinkAPI.Common;
+using CareLinkAPI.Common.Models;
 using CareLinkAPI.DTOs.Backoffice;
 
 namespace CareLinkAPI.Services.Backoffice;

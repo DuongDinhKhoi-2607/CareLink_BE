@@ -1,7 +1,7 @@
-using CareLinkAPI.Common;
+using CareLinkAPI.Common.Models;
 using CareLinkAPI.Models;
 
-namespace CareLinkAPI.Repositories.Backoffice;
+namespace CareLinkAPI.Repositories;
 
 public interface IReviewRepository
 {

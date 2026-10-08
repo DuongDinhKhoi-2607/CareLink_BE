@@ -1,50 +1,48 @@
-using CareLinkAPI.Common;
 using CareLinkAPI.Contracts.Auth;
+using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.Contracts.Clinical;
-using CareLinkAPI.Models;
-using CareLinkAPI.Repositories.Backoffice;
+using CareLinkAPI.Contracts.Payment;
+using CareLinkAPI.Repositories;
+using CareLinkAPI.Services;
 using CareLinkAPI.Services.Auth;
 using CareLinkAPI.Services.Backoffice;
 using CareLinkAPI.Services.Clinical;
-using Microsoft.EntityFrameworkCore;
 
 namespace CareLinkAPI.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddCareLinkInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddCareLinkRepositories(this IServiceCollection services)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
-
-        services.AddDbContext<CareLinkDbContext>(options =>
-        {
-            if (!string.IsNullOrEmpty(connectionString))
-            {
-                options.UseNpgsql(connectionString);
-            }
-        });
-
-        services.AddHttpContextAccessor();
-        services.AddExceptionHandler<ApiExceptionHandler>();
-        services.AddProblemDetails();
-
-        // Cross-team contracts & current user
-        services.AddScoped<ICurrentUserService, CurrentUserService>();
-        services.AddScoped<IHealthRecordQueryService, HealthRecordQueryService>();
-        // Note: IBookingQueryService and IPaymentQueryService will be registered by Khôi (BE2) upon merge
-
-        // Repositories
+        // Core data access repositories
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICareRecipientRepository, CareRecipientRepository>();
+        services.AddScoped<IAddressRepository, AddressRepository>();
+        services.AddScoped<INurseRepository, NurseRepository>();
+        services.AddScoped<INurseAvailabilityRepository, NurseAvailabilityRepository>();
         services.AddScoped<IServiceRepository, ServiceRepository>();
+        services.AddScoped<IBookingRepository, BookingRepository>();
         services.AddScoped<IHealthRecordRepository, HealthRecordRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<IDisputeRepository, DisputeRepository>();
 
         return services;
     }
 
-    public static IServiceCollection AddBackofficeServices(this IServiceCollection services)
+    public static IServiceCollection AddCareLinkServices(this IServiceCollection services)
     {
-        // Business Services
+        // Cross-team contracts & query services
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IHealthRecordQueryService, HealthRecordQueryService>();
+        services.AddScoped<IBookingQueryService, BookingQueryService>();
+        services.AddScoped<IPaymentQueryService, PaymentQueryService>();
+
+        // Domain & Application Services
+        services.AddScoped<INurseSearchService, NurseSearchService>();
+        services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
         services.AddScoped<IHealthRecordService, HealthRecordService>();
         services.AddScoped<IReviewService, ReviewService>();

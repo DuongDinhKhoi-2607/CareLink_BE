@@ -1,6 +1,6 @@
 using CareLinkAPI.Models;
 
-namespace CareLinkAPI.Repositories.Backoffice;
+namespace CareLinkAPI.Repositories;
 
 public interface IHealthRecordRepository
 {

@@ -1,5 +1,5 @@
 using CareLinkAPI.Contracts.Clinical;
-using CareLinkAPI.Repositories.Backoffice;
+using CareLinkAPI.Repositories;
 
 namespace CareLinkAPI.Services.Clinical;
 

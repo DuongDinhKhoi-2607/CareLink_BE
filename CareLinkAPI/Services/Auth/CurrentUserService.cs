@@ -1,5 +1,6 @@
 using System.Security.Claims;
-using CareLinkAPI.Common;
+using CareLinkAPI.Common.Enums;
+using CareLinkAPI.Common.Exceptions;
 using CareLinkAPI.Contracts.Auth;
 
 namespace CareLinkAPI.Services.Auth;

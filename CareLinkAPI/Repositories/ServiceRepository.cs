@@ -1,8 +1,8 @@
-using CareLinkAPI.Common;
+using CareLinkAPI.Common.Models;
 using CareLinkAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace CareLinkAPI.Repositories.Backoffice;
+namespace CareLinkAPI.Repositories;
 
 public class ServiceRepository : IServiceRepository
 {
@@ -13,9 +13,9 @@ public class ServiceRepository : IServiceRepository
         _db = db;
     }
 
-    public async Task<Service?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    public async Task<Service?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await _db.Services.FirstOrDefaultAsync(s => s.Id == id, ct);
+        return await _db.Services.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
     }
 
     public async Task<IReadOnlyList<Service>> GetAllActiveAsync(CancellationToken ct = default)
