@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 namespace CareLinkAPI.Models;
@@ -48,6 +49,8 @@ public partial class CareLinkDbContext : DbContext
     public virtual DbSet<Wallet> Wallets { get; set; }
 
     public virtual DbSet<WalletTransaction> WalletTransactions { get; set; }
+
+    public virtual DbSet<HandbookArticle> HandbookArticles { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -741,6 +744,87 @@ public partial class CareLinkDbContext : DbContext
                 .HasForeignKey(d => d.WalletId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_wtx_wallet");
+        });
+
+        modelBuilder.Entity<HandbookArticle>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("handbook_articles_pkey");
+
+            entity.ToTable("handbook_articles");
+
+            entity.HasIndex(e => e.Slug, "handbook_articles_slug_key").IsUnique();
+            entity.HasIndex(e => e.Category, "idx_handbook_category");
+            entity.HasIndex(e => e.Status, "idx_handbook_status");
+            entity.HasIndex(e => e.Featured, "idx_handbook_featured");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.Title)
+                .HasColumnType("character varying")
+                .HasColumnName("title");
+            entity.Property(e => e.Slug)
+                .HasColumnType("character varying")
+                .HasColumnName("slug");
+            entity.Property(e => e.Category)
+                .HasColumnType("character varying")
+                .HasColumnName("category");
+            entity.Property(e => e.CategoryName)
+                .HasColumnType("character varying")
+                .HasColumnName("category_name");
+            entity.Property(e => e.Summary)
+                .HasColumnName("summary");
+            entity.Property(e => e.Content)
+                .HasColumnName("content");
+            entity.Property(e => e.ReadTime)
+                .HasDefaultValueSql("'5 phút đọc'::character varying")
+                .HasColumnType("character varying")
+                .HasColumnName("read_time");
+            entity.Property(e => e.Source)
+                .HasDefaultValueSql("'Vinmec'::character varying")
+                .HasColumnType("character varying")
+                .HasColumnName("source");
+            entity.Property(e => e.SourceDetail)
+                .HasColumnType("character varying")
+                .HasColumnName("source_detail");
+            entity.Property(e => e.ImageUrl)
+                .HasColumnName("image_url");
+            entity.Property(e => e.Featured)
+                .HasDefaultValue(false)
+                .HasColumnName("featured");
+            entity.Property(e => e.Status)
+                .HasDefaultValueSql("'published'::character varying")
+                .HasColumnType("character varying")
+                .HasColumnName("status");
+            var referencesComparer = new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<HandbookReferenceItem>>(
+                (c1, c2) => System.Text.Json.JsonSerializer.Serialize(c1, (System.Text.Json.JsonSerializerOptions?)null) == System.Text.Json.JsonSerializer.Serialize(c2, (System.Text.Json.JsonSerializerOptions?)null),
+                c => c == null ? 0 : System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null).GetHashCode(),
+                c => System.Text.Json.JsonSerializer.Deserialize<List<HandbookReferenceItem>>(System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null), (System.Text.Json.JsonSerializerOptions?)null) ?? new List<HandbookReferenceItem>()
+            );
+
+            entity.Property(e => e.References)
+                .HasColumnType("jsonb")
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => JsonSerializer.Deserialize<List<HandbookReferenceItem>>(v, (JsonSerializerOptions?)null) ?? new List<HandbookReferenceItem>(),
+                    referencesComparer
+                )
+                .HasColumnName("references");
+            entity.Property(e => e.AuthorId).HasColumnName("author_id");
+            entity.Property(e => e.PublishedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("published_at");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Author).WithMany()
+                .HasForeignKey(d => d.AuthorId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_handbook_author");
         });
 
         OnModelCreatingPartial(modelBuilder);
