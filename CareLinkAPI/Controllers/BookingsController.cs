@@ -38,6 +38,7 @@ public class BookingsController(IBookingService bookingService) : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Book-02: Xem chi tiết ca chăm sóc theo ID (Khách hàng, Điều dưỡng hoặc Admin).</summary>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(BookingResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
