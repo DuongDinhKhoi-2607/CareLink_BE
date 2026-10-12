@@ -1,16 +1,31 @@
+using CareLinkAPI.Models;
+
 namespace CareLinkAPI.Repositories;
 
 public interface INurseAvailabilityRepository
 {
-    /// <summary>
-    /// Search-03: ids of nurses (among <paramref name="candidateNurseIds"/>, or all when null) that have an
-    /// active availability window on <paramref name="dayOfWeek"/> fully covering [start, end].
-    /// Nurses that never configured availability are therefore never returned.
-    /// </summary>
     Task<HashSet<Guid>> GetAvailableNurseIdsAsync(
         int dayOfWeek,
         TimeOnly start,
         TimeOnly end,
         IReadOnlyCollection<Guid>? candidateNurseIds = null,
         CancellationToken cancellationToken = default);
+
+    Task<List<NurseAvailability>> GetByNurseIdAsync(Guid nurseId, CancellationToken cancellationToken = default);
+
+    Task<List<NurseAvailability>> GetByNurseIdForUpdateAsync(Guid nurseId, CancellationToken cancellationToken = default);
+
+    Task<NurseAvailability?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<NurseAvailability?> GetByIdForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task AddAsync(NurseAvailability availability, CancellationToken cancellationToken = default);
+
+    Task AddRangeAsync(IEnumerable<NurseAvailability> availabilities, CancellationToken cancellationToken = default);
+
+    void Update(NurseAvailability availability);
+
+    void Delete(NurseAvailability availability);
+
+    void DeleteRange(IEnumerable<NurseAvailability> availabilities);
 }

@@ -43,12 +43,12 @@
 
 | ID | Mức độ | Trạng thái | Mô tả |
 |---|---|---|---|
-| User-01 | 🔴 MUST | ❌ | CRUD thông tin cá nhân Customer (Avatar, Họ tên, SĐT, Email) |
-| User-02 | 🔴 MUST | ❌ | CRUD Danh bạ địa chỉ nhận chăm sóc (Lat/Long, Số nhà, Phường, Quận) |
-| User-03 | 🔴 MUST | ❌ | CRUD Danh sách người được chăm sóc (`CareRecipient`: Tên, Năm sinh, Giới tính, Tiền sử bệnh lý, Ghi chú) |
-| User-04 | 🔴 MUST | ❌ | CRUD Hồ sơ năng lực Nurse (Tiểu sử, Học vấn, Kinh nghiệm lâm sàng) |
-| User-05 | 🔴 MUST | ❌ | Cấu hình khu vực hoạt động ưu tiên của Nurse (kèm bán kính km) |
-| User-06 | 🔴 MUST | ❌ | Quản lý Lịch rảnh Nurse (`NurseAvailability`: Thứ trong tuần, Khung giờ) |
+| User-01 | 🔴 MUST | ✅ | CRUD thông tin cá nhân Customer (Avatar, Họ tên, SĐT, Email) |
+| User-02 | 🔴 MUST | ✅ | CRUD Danh bạ địa chỉ nhận chăm sóc (Lat/Long, Số nhà, Phường, Quận) |
+| User-03 | 🔴 MUST | ✅ | CRUD Danh sách người được chăm sóc (`CareRecipient`: Tên, Năm sinh, Giới tính, Tiền sử bệnh lý, Ghi chú) |
+| User-04 | 🔴 MUST | ✅ | CRUD Hồ sơ năng lực Nurse (Tiểu sử, Học vấn, Kinh nghiệm lâm sàng) |
+| User-05 | 🔴 MUST | ✅ | Cấu hình khu vực hoạt động ưu tiên của Nurse (kèm bán kính km) |
+| User-06 | 🔴 MUST | ✅ | Quản lý Lịch rảnh Nurse (`NurseAvailability`: Thứ trong tuần, Khung giờ) |
 
 ---
 
@@ -56,25 +56,31 @@
 
 | ID | Mức độ | Trạng thái | Mô tả |
 |---|---|---|---|
-| Verif-01 | 🔴 MUST | ❌ | API Upload chứng từ: **CCCD 2 mặt**, Bằng cử nhân Điều dưỡng, Chứng chỉ hành nghề |
-| Verif-01b | 🔴 MUST | ❌ | Yêu cầu upload **ảnh selfie cầm CCCD** (để Admin đối chiếu thủ công) |
-| Verif-01c | 🔴 MUST | ❌ | Lưu trường `LicenseNumber` (Số CCHN), `LicenseIssuedDate`, `LicenseExpiryDate` vào DB |
-| Verif-02 | 🔴 MUST | ❌ | **Admin duyệt (Approve)** hoặc **Từ chối (Reject kèm lý do cụ thể)** hồ sơ Nurse |
-| Verif-02b | 🔴 MUST | ❌ | Admin phải tick xác nhận checklist trước khi Approve: CCCD còn hạn, Bằng hợp lệ, Chứng chỉ còn hạn |
-| Verif-03 | 🔴 MUST | ❌ | Quản lý vòng đời trạng thái Nurse: `PendingVerification` → `Active` / `Rejected` / `Suspended` |
-| Verif-04 | 🔴 MUST | ❌ | **API Nurse nộp lại hồ sơ** (`re-submit`) sau khi bị Reject |
-| Verif-05 | 🔴 MUST | ❌ | Unique constraint trên `CitizenId` (Số CCCD) – chống tạo 2 tài khoản Nurse trùng nhau |
-| Verif-06 | 🟠 SHOULD | ❌ | Gửi Notification + Email cho Nurse khi hồ sơ được Approve hoặc Reject |
-| Verif-07 | 🟢 NICE | ❌ | Cảnh báo Admin khi có Nurse có `LicenseExpiryDate` < 30 ngày nữa là hết hạn |
+| Verif-01 | 🔴 MUST | ✅ | API Upload chứng từ: **CCCD 2 mặt**, Bằng cử nhân Điều dưỡng, Chứng chỉ hành nghề (hoặc Thẻ sinh viên) |
+| Verif-01b | 🔴 MUST | ✅ | Yêu cầu upload **ảnh selfie cầm CCCD** (để Admin đối chiếu khuôn mặt thủ công) |
+| Verif-01c | 🔴 MUST | ✅ | Lưu trường `LicenseNumber` (Số CCHN), `LicenseIssuedDate`, `LicenseExpiryDate`, `CitizenId` vào DB |
+| Verif-01d | 🔴 MUST | ✅ | Phân loại đối tượng: **Điều dưỡng đã tốt nghiệp** (bắt buộc CCHN) vs **Sinh viên Y** (dùng `STUDENT_CARD`, CCHN nullable) |
+| Verif-02 | 🔴 MUST | ✅ | **Admin duyệt (Approve)** hoặc **Từ chối (Reject kèm lý do cụ thể)** hồ sơ Nurse |
+| Verif-02b | 🔴 MUST | ✅ | Admin phải tick xác nhận checklist trước khi Approve: CCCD còn hạn, Bằng/Thẻ SV hợp lệ, Chứng chỉ còn hạn, Khớp khuôn mặt |
+| Verif-03 | 🔴 MUST | ✅ | **State Machine vòng đời duyệt hồ sơ**: `Unsubmitted` → `Pending` → `Approved` / `Rejected` → `Resubmitted` tách biệt với trạng thái tài khoản |
+| Verif-04 | 🔴 MUST | ✅ | **API Nurse nộp lại hồ sơ** (`re-submit`) sau khi bị Reject |
+| Verif-05 | 🔴 MUST | ✅ | Unique constraint trên `CitizenId` (Số CCCD) – chống tạo 2 tài khoản Nurse trùng nhau |
+| Verif-06 | 🟠 SHOULD | ✅ | Gửi Notification trong DB cho Nurse khi hồ sơ được Approve hoặc Reject |
+| Verif-07 | 🟢 NICE | ✅ | Cảnh báo Admin khi có Nurse có `LicenseExpiryDate` < 30 ngày nữa là hết hạn |
 
-**Data model cần định nghĩa rõ:**
+**Data model chuẩn hóa:**
 ```csharp
-// NurseDocument entity
-DocumentType: CCCD_FRONT | CCCD_BACK | DEGREE | LICENSE | SELFIE
-Fields: FileUrl, Status, AdminNote, UploadedAt, ReviewedAt, ReviewedById
+// DocumentType
+CCCD_FRONT (1) | CCCD_BACK (2) | DEGREE (3) | LICENSE (4) | SELFIE (5) | STUDENT_CARD (6)
 
-// Thêm vào NurseProfile
-LicenseNumber, LicenseIssuedDate, LicenseExpiryDate, CitizenId (unique)
+// VerificationStatus
+Unsubmitted (0) | Pending (1) | Approved (2) | Rejected (3) | Resubmitted (4)
+
+// PractitionerType
+GraduateNurse (1) | MedicalStudent (2)
+
+// NurseDocument fields
+Id, NurseId (FK -> nurses.id), DocumentType, FileUrl, Status, AdminNote, AdminChecklist, UploadedAt, ReviewedAt, ReviewedBy
 ```
 
 ---
@@ -339,10 +345,10 @@ GET    /api/v1/admin/dashboard/revenue                   ← BỔ SUNG MỚI
 
 | Thành viên | Tổng task MUST | Hoàn thành | % |
 |---|---|---|---|
-| Quốc | 19 | 0 | 0% |
+| Quốc | 20 | 15 | 75.0% |
 | Khôi | 16 | 0 | 0% |
 | Vy | 14 | 0 | 0% |
-| **Tổng** | **49** | **0** | **0%** |
+| **Tổng** | **50** | **15** | **30.0%** |
 
 ## Theo mức độ (toàn dự án)
 

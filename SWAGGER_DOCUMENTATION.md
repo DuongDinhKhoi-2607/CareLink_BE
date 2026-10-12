@@ -40,13 +40,42 @@ File [Program.cs](file:///e:/CareLink/CareLink_BE/CareLinkAPI/Program.cs) đã �
 ### 3. Cấu trúc Route & Controller
 Giữ nguyên kiến trúc chuẩn RESTful API đồng nhất cho các module hiện tại:
 
-- **[BookingsController.cs](file:///e:/CareLink/CareLink_BE/CareLinkAPI/Controllers/BookingsController.cs):**
+- **[BookingsController.cs](file:///d:/Documents/EXE1/CareLink_BE/CareLinkAPI/Controllers/BookingsController.cs):**
   - Route gốc: `/api/v1/bookings`
   - Các thao tác: Tạo mới (`POST`), Danh sách (`GET`), Chi tiết (`GET {id}`), Chấp nhận (`PUT {id}/accept`), Từ chối (`PUT {id}/reject`), Bắt đầu ca (`PUT {id}/start`), Hoàn thành ca (`PUT {id}/finish`), Hủy ca (`PUT {id}/cancel`).
 
-- **[NursesController.cs](file:///e:/CareLink/CareLink_BE/CareLinkAPI/Controllers/NursesController.cs):**
+- **[NursesController.cs](file:///d:/Documents/EXE1/CareLink_BE/CareLinkAPI/Controllers/NursesController.cs):**
   - Route gốc: `/api/v1/nurses`
   - Thao tác tìm kiếm: `GET /api/v1/nurses/search`
+
+- **[UsersController.cs](file:///d:/Documents/EXE1/CareLink_BE/CareLinkAPI/Controllers/UsersController.cs):** *(Module 2 - User-01)*
+  - Route gốc: `/api/v1/users`
+  - Các thao tác: Xem thông tin cá nhân (`GET /api/v1/users/me`), Cập nhật thông tin cá nhân (`PUT /api/v1/users/me`).
+
+- **[AddressesController.cs](file:///d:/Documents/EXE1/CareLink_BE/CareLinkAPI/Controllers/AddressesController.cs):** *(Module 2 - User-02)*
+  - Route gốc: `/api/v1/addresses`
+  - Các thao tác: Danh sách địa chỉ chăm sóc (`GET`), Chi tiết (`GET {id}`), Tạo mới (`POST`), Cập nhật (`PUT {id}`), Xóa (`DELETE {id}`).
+
+- **[RecipientsController.cs](file:///d:/Documents/EXE1/CareLink_BE/CareLinkAPI/Controllers/RecipientsController.cs):** *(Module 2 - User-03)*
+  - Route gốc: `/api/v1/recipients`
+  - Các thao tác: Danh sách người được chăm sóc (`GET`), Chi tiết (`GET {id}`), Tạo mới (`POST`), Cập nhật (`PUT {id}`), Xóa (`DELETE {id}`).
+
+- **[NurseProfileController.cs](file:///d:/Documents/EXE1/CareLink_BE/CareLinkAPI/Controllers/NurseProfileController.cs):** *(Module 2 & Module 3)*
+  - Route gốc: `/api/v1/nurse`
+  - Hồ sơ & Khu vực hoạt động *(Module 2)*: Xem hồ sơ (`GET /api/v1/nurse/profile`), Cập nhật hồ sơ & bán kính (`PUT /api/v1/nurse/profile`).
+  - Lịch rảnh định kỳ *(Module 2)*: Xem lịch rảnh (`GET /api/v1/nurse/availability`), Thêm khung giờ (`POST /api/v1/nurse/availability`), Thiết lập toàn bộ lịch (`PUT /api/v1/nurse/availability`), Xóa khung giờ (`DELETE /api/v1/nurse/availability/{id}`).
+  - Xác thực hồ sơ KYC *(Module 3 - Verif-01, Verif-02, Verif-03, Verif-04, Verif-05)*:
+    - Nộp hồ sơ KYC & giấy tờ (`POST /api/v1/nurse/documents`)
+    - Xem danh sách giấy tờ đã nộp (`GET /api/v1/nurse/documents`)
+    - Nộp bổ sung sau khi bị từ chối (`POST /api/v1/nurse/documents/re-submit`)
+    - Kiểm tra trạng thái xác thực (`GET /api/v1/nurse/verification-status`)
+
+- **[NurseVerificationsController.cs](file:///d:/Documents/EXE1/CareLink_BE/CareLinkAPI/Controllers/Backoffice/NurseVerificationsController.cs):** *(Module 3 - Admin Backoffice: Verif-03, Verif-06, Verif-07)*
+  - Route gốc: `/api/v1/admin/nurse-verifications`
+  - Danh sách hồ sơ chờ duyệt (phân trang, search, lọc theo trạng thái): `GET /api/v1/admin/nurse-verifications`
+  - Chi tiết hồ sơ kèm giấy tờ: `GET /api/v1/admin/nurse-verifications/{id}`
+  - Phê duyệt / Từ chối hồ sơ kèm checklist & lý do: `PUT /api/v1/admin/nurse-verifications/{id}`
+  - Cảnh báo chứng chỉ hành nghề sắp hết hạn (< 30 ngày): `GET /api/v1/admin/nurse-verifications/expiring-licenses`
 
 ---
 
@@ -71,8 +100,17 @@ Mở trình duyệt và truy cập địa chỉ:
 
 ---
 
-## 📋 DANH SÁCH FILE THAY ĐỔI
+## 📋 DANH SÁCH FILE THAY ĐỔI / BỔ SUNG
 - `CareLinkAPI/CareLinkAPI.csproj` (Thêm PackageReference SwaggerUI)
 - `CareLinkAPI/Program.cs` (Đăng ký OpenAPI Transformer & UseSwaggerUI)
 - `CareLinkAPI/Controllers/BookingsController.cs` (Chuẩn hóa XML Docs & Routes)
 - `CareLinkAPI/Controllers/NursesController.cs` (Chuẩn hóa XML Docs & Routes)
+- `CareLinkAPI/Controllers/UsersController.cs` (Module 2: Quản lý thông tin cá nhân User/Customer)
+- `CareLinkAPI/Controllers/AddressesController.cs` (Module 2: Quản lý danh bạ địa chỉ chăm sóc)
+- `CareLinkAPI/Controllers/RecipientsController.cs` (Module 2: Quản lý danh sách người được chăm sóc)
+- `CareLinkAPI/Controllers/NurseProfileController.cs` (Module 2 & 3: Hồ sơ năng lực, lịch rảnh & xác thực KYC của Điều dưỡng)
+- `CareLinkAPI/Controllers/Backoffice/NurseVerificationsController.cs` (Module 3: Admin Backoffice xét duyệt hồ sơ & cảnh báo chứng chỉ)
+- `CareLinkAPI/Services/NurseVerificationService.cs` (Module 3: Logic xác thực KYC, re-submit, checklist, notification & expiry)
+- `CareLinkAPI/Repositories/NurseDocumentRepository.cs` & `NurseRepository.cs` (Module 3: Truy vấn giấy tờ, CCCD & cảnh báo hết hạn)
+- `CareLinkAPI/DTOs/Verification/NurseVerificationDTOs.cs` & `AdminVerificationDTOs.cs` (Module 3: DTOs xác thực KYC & duyệt hồ sơ)
+
