@@ -9,4 +9,12 @@ public static class NotificationTypes
     public const string BookingCompleted = "BOOKING_COMPLETED";
     public const string BookingCanceled = "BOOKING_CANCELED";
     public const string BookingAutoRejected = "BOOKING_AUTO_REJECTED";
+
+    // Module 7: Payment & Wallet
+    public const string BookingNewRequest = "BOOKING_NEW_REQUEST";
+    public const string PaymentSucceeded = "PAYMENT_SUCCEEDED";
+    public const string PaymentRefunded = "PAYMENT_REFUNDED";
+    public const string WalletCredited = "WALLET_CREDITED";
+    public const string PayoutApproved = "PAYOUT_APPROVED";
+    public const string PayoutRejected = "PAYOUT_REJECTED";
 }

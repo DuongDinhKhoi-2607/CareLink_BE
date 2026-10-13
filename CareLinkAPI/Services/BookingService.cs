@@ -25,6 +25,7 @@ public class BookingService(
     IHealthRecordRepository healthRecords,
     INotificationRepository notifications,
     IUserRepository users,
+    IWalletService walletService,
     IUnitOfWork unitOfWork,
     IOptions<BookingOptions> options,
     ILogger<BookingService> logger) : IBookingService
@@ -281,6 +282,15 @@ public class BookingService(
                 NotificationTypes.BookingCompleted,
                 booking.Id,
                 cancellationToken);
+
+            // Pay-03: Credit nurse wallet (platform fee deducted inside WalletService)
+            var platformFee = booking.Payment?.PlatformFee ?? 50_000m;
+            await walletService.SettleBookingEarningAsync(
+                booking.NurseId,
+                booking.Id,
+                booking.TotalPrice,
+                platformFee,
+                cancellationToken);
         }, cancellationToken);
 
     public Task<BookingResponse> CancelAsync(
@@ -367,6 +377,44 @@ public class BookingService(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
             logger.LogInformation("Auto-rejected {Count} booking(s) that were not accepted in time.", expired.Count);
+            return expired.Count;
+        }, IsolationLevel.Serializable, cancellationToken);
+    }
+
+    // ───────────────────────── Job-01: auto cancel unpaid ─────────────────────────
+
+    public Task<int> AutoCancelUnpaidAsync(CancellationToken cancellationToken = default)
+    {
+        return unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var now = DateTime.UtcNow;
+            var cutoff = now.AddMinutes(-_options.PendingPaymentHoldMinutes);
+
+            var expired = await bookings.GetExpiredPendingPaymentAsync(cutoff, take: 100, cancellationToken);
+            if (expired.Count == 0)
+            {
+                return 0;
+            }
+
+            foreach (var booking in expired)
+            {
+                ApplyCancellation(
+                    booking,
+                    CanceledBy.System,
+                    $"Hết hạn thanh toán quá {_options.PendingPaymentHoldMinutes} phút",
+                    now);
+
+                await NotifyAsync(
+                    booking.Customer.UserId,
+                    "Lịch hẹn đã bị hủy do hết hạn thanh toán",
+                    $"Lịch hẹn lúc {FormatTime(booking.ScheduledStart)} đã bị hủy do không hoàn tất thanh toán trong vòng {_options.PendingPaymentHoldMinutes} phút.",
+                    NotificationTypes.BookingCanceled,
+                    booking.Id,
+                    cancellationToken);
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Auto-canceled {Count} unpaid booking(s) that exceeded hold time.", expired.Count);
             return expired.Count;
         }, IsolationLevel.Serializable, cancellationToken);
     }

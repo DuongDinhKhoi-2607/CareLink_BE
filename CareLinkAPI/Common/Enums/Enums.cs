@@ -58,3 +58,25 @@ public enum DisputeStatus
     Dismissed = 4
 }
 
+/// <summary>wallet_transactions.type: 1=BookingEarning | 2=RefundDeduction | 3=Withdrawal | 4=PlatformFee</summary>
+public enum WalletTransactionType
+{
+    BookingEarning = 1,
+    RefundDeduction = 2,
+    Withdrawal = 3,
+    PlatformFee = 4
+}
+
+/// <summary>payout_requests.status: 1=Pending | 2=Approved | 3=Rejected</summary>
+public enum PayoutRequestStatus
+{
+    Pending = 1,
+    Approved = 2,
+    Rejected = 3
+}
+
+/// <summary>payments.payment_method: 1=PayOS</summary>
+public enum PaymentMethod
+{
+    PayOS = 1
+}

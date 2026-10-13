@@ -27,6 +27,7 @@ public class BookingAutoRejectWorker(
                     using var scope = scopeFactory.CreateScope();
                     var bookingService = scope.ServiceProvider.GetRequiredService<IBookingService>();
                     await bookingService.AutoRejectExpiredAsync(stoppingToken);
+                    await bookingService.AutoCancelUnpaidAsync(stoppingToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {

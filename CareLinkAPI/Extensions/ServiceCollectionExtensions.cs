@@ -30,6 +30,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDisputeRepository, DisputeRepository>();
         services.AddScoped<IHandbookRepository, HandbookRepository>();
 
+        // Module 7: Payment & Wallet
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IWalletRepository, WalletRepository>();
+        services.AddScoped<IPayoutRequestRepository, PayoutRequestRepository>();
+
         return services;
     }
 
@@ -51,6 +56,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDisputeService, DisputeService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
         services.AddScoped<IHandbookService, HandbookService>();
+
+        // Module 7: Payment & Wallet
+        services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IWalletService, WalletService>();
 
         return services;
     }
