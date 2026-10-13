@@ -15,6 +15,13 @@ public class NurseVerificationService(
     INotificationRepository notificationRepository,
     IUnitOfWork unitOfWork) : INurseVerificationService
 {
+    /// <summary>CCCD Việt Nam gồm đúng 12 chữ số; số thứ 4 (giới tính + thế kỷ) từ 0–9.</summary>
+    private static void ValidateCitizenIdFormat(string cccd)
+    {
+        if (cccd.Length != 12 || !cccd.All(char.IsDigit))
+            throw new BadRequestException("Số CCCD không hợp lệ: phải gồm đúng 12 chữ số.");
+    }
+
     // ─── NURSE: SUBMIT DOCUMENTS ───────────────────────────────────────────────
     public async Task<NurseVerificationStatusResponse> SubmitVerificationAsync(
         Guid userId,
@@ -27,6 +34,7 @@ public class NurseVerificationService(
             throw new BadRequestException("Số CCCD (CitizenId) là bắt buộc.");
 
         var normalizedCccd = request.CitizenId.Trim();
+        ValidateCitizenIdFormat(normalizedCccd);
         if (await nurseRepository.IsCitizenIdExistsAsync(normalizedCccd, nurse.Id, cancellationToken))
             throw new ConflictException("Số CCCD này đã được đăng ký bởi một tài khoản điều dưỡng khác.");
 
@@ -84,6 +92,7 @@ public class NurseVerificationService(
         if (!string.IsNullOrWhiteSpace(request.CitizenId))
         {
             var normalizedCccd = request.CitizenId.Trim();
+            ValidateCitizenIdFormat(normalizedCccd);
             if (await nurseRepository.IsCitizenIdExistsAsync(normalizedCccd, nurse.Id, cancellationToken))
                 throw new ConflictException("Số CCCD này đã được sử dụng bởi một tài khoản điều dưỡng khác.");
             nurse.CitizenId = normalizedCccd;

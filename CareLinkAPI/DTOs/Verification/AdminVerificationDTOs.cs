@@ -15,6 +15,9 @@ public class AdminVerificationChecklist
 
     /// <summary>Ảnh selfie khuôn mặt khớp với ảnh chân dung trên CCCD</summary>
     public bool FaceMatch { get; set; }
+
+    /// <summary>Admin đã tra cứu CCHN/bằng trên cổng Sở Y tế hoặc website trường (chỉ để ghi nhận, không bắt buộc)</summary>
+    public bool LicenseLookedUp { get; set; }
 }
 
 public class AdminReviewNurseVerificationRequest

@@ -71,6 +71,29 @@
 | Verif-05 | 🔴 MUST | ✅ | Unique constraint trên `CitizenId` (Số CCCD) – chống tạo 2 tài khoản Nurse trùng nhau |
 | Verif-06 | 🟠 SHOULD | ✅ | Gửi Notification trong DB cho Nurse khi hồ sơ được Approve hoặc Reject |
 | Verif-07 | 🟢 NICE | ✅ | API Cảnh báo Admin khi có Nurse có `LicenseExpiryDate` < 30 ngày nữa là hết hạn |
+| Verif-08 | 🔴 MUST | ✅ | **Validate CCCD đúng 12 chữ số** (BE trả 400 nếu sai) – áp dụng cho `submit` và `re-submit` |
+| Verif-09 | 🟠 SHOULD | ✅ | Checklist Admin có thêm `licenseLookedUp` (đã tra cứu CCHN/bằng trên web Sở Y tế/trường) – chỉ để ghi nhận, không bắt buộc |
+
+### 📝 Hướng dẫn cho FE (cách CareLink chống scam – giữ đơn giản)
+
+**Nurse (màn upload hồ sơ):**
+- Ô CCCD: chỉ cho nhập **12 chữ số**, validate trước khi gọi API (BE vẫn kiểm tra lại).
+- Ảnh **SELFIE**: hiển thị hướng dẫn *"Chụp mặt bạn cầm CCCD + tờ giấy ghi `CareLink - <ngày hôm nay>`"* (chống lấy ảnh trên mạng).
+- Điều dưỡng đã tốt nghiệp: bắt buộc nhập **Số CCHN + ngày cấp + ngày hết hạn** và upload CCHN, bằng.
+- Sinh viên Y: upload `STUDENT_CARD` (thẻ SV hoặc giấy xác nhận/bảng điểm đang học), CCHN không bắt buộc.
+- Hiển thị cảnh báo cho sinh viên Y: *"Chỉ được nhận ca chăm sóc cơ bản, không nhận ca thủ thuật y tế (tiêm truyền, đặt sonde…)"*.
+
+**Admin (màn duyệt hồ sơ):** checklist gửi lên khi Approve gồm:
+```json
+{ "cccdValid": true, "degreeOrStudentCardValid": true, "licenseValid": true,
+  "faceMatch": true, "licenseLookedUp": true }
+```
+- Bắt buộc `true`: `cccdValid`, `degreeOrStudentCardValid`, `faceMatch`.
+- Gợi ý Admin: tra số CCHN / số hiệu bằng trên cổng Sở Y tế hoặc website trường, rồi tick `licenseLookedUp`.
+- Lỗi CCCD sai định dạng trả về **HTTP 400** (`"Số CCCD không hợp lệ: phải gồm đúng 12 chữ số."`), trùng CCCD trả **409**.
+
+> 🎤 **Khi giám khảo hỏi "làm sao chống scam?":** 3 lớp – (1) CCCD 12 số + chặn trùng + selfie cầm CCCD kèm giấy ghi ngày; (2) Admin tra cứu chéo CCHN/bằng trên cổng Sở Y tế/trường; (3) Sinh viên Y bị giới hạn ca cơ bản. *Roadmap:* tích hợp eKYC (FPT.AI/VNPT), NFC/VNeID, phỏng vấn video khi thương mại hóa.
+
 
 **Data model chuẩn hóa:**
 ```csharp
