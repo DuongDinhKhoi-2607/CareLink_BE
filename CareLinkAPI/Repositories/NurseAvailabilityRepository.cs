@@ -28,4 +28,38 @@ public class NurseAvailabilityRepository(CareLinkDbContext db) : INurseAvailabil
         var ids = await query.Select(a => a.NurseId).Distinct().ToListAsync(cancellationToken);
         return ids.ToHashSet();
     }
+
+    public Task<List<NurseAvailability>> GetByNurseIdAsync(Guid nurseId, CancellationToken cancellationToken = default) =>
+        db.NurseAvailabilities
+            .AsNoTracking()
+            .Where(a => a.NurseId == nurseId)
+            .OrderBy(a => a.DayOfWeek ?? 7)
+            .ThenBy(a => a.StartTime)
+            .ToListAsync(cancellationToken);
+
+    public Task<List<NurseAvailability>> GetByNurseIdForUpdateAsync(Guid nurseId, CancellationToken cancellationToken = default) =>
+        db.NurseAvailabilities
+            .Where(a => a.NurseId == nurseId)
+            .ToListAsync(cancellationToken);
+
+    public Task<NurseAvailability?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        db.NurseAvailabilities.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+
+    public Task<NurseAvailability?> GetByIdForUpdateAsync(Guid id, CancellationToken cancellationToken = default) =>
+        db.NurseAvailabilities.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+
+    public async Task AddAsync(NurseAvailability availability, CancellationToken cancellationToken = default) =>
+        await db.NurseAvailabilities.AddAsync(availability, cancellationToken);
+
+    public async Task AddRangeAsync(IEnumerable<NurseAvailability> availabilities, CancellationToken cancellationToken = default) =>
+        await db.NurseAvailabilities.AddRangeAsync(availabilities, cancellationToken);
+
+    public void Update(NurseAvailability availability) =>
+        db.NurseAvailabilities.Update(availability);
+
+    public void Delete(NurseAvailability availability) =>
+        db.NurseAvailabilities.Remove(availability);
+
+    public void DeleteRange(IEnumerable<NurseAvailability> availabilities) =>
+        db.NurseAvailabilities.RemoveRange(availabilities);
 }

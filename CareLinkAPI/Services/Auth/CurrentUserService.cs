@@ -27,7 +27,19 @@ public class CurrentUserService : ICurrentUserService
                 ?? User?.FindFirst("userId")?.Value
                 ?? User?.FindFirst("id")?.Value;
 
-            return Guid.TryParse(idClaim, out var guid) ? guid : null;
+            if (Guid.TryParse(idClaim, out var guid))
+                return guid;
+
+            var httpContext = _httpContextAccessor.HttpContext;
+            var env = httpContext?.RequestServices.GetService<IHostEnvironment>();
+            if (env != null && env.IsDevelopment())
+            {
+                var devHeader = httpContext?.Request.Headers["X-User-Id"].FirstOrDefault();
+                if (Guid.TryParse(devHeader, out var devGuid))
+                    return devGuid;
+            }
+
+            return null;
         }
     }
 

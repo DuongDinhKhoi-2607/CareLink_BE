@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICareRecipientRepository, CareRecipientRepository>();
         services.AddScoped<IAddressRepository, AddressRepository>();
         services.AddScoped<INurseRepository, NurseRepository>();
+        services.AddScoped<INurseDocumentRepository, NurseDocumentRepository>();
         services.AddScoped<INurseAvailabilityRepository, NurseAvailabilityRepository>();
         services.AddScoped<IServiceRepository, ServiceRepository>();
         services.AddScoped<IBookingRepository, BookingRepository>();
@@ -48,6 +49,11 @@ public static class ServiceCollectionExtensions
 
         // Domain & Application Services
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IAddressService, AddressService>();
+        services.AddScoped<ICareRecipientService, CareRecipientService>();
+        services.AddScoped<INurseProfileService, NurseProfileService>();
+        services.AddScoped<INurseVerificationService, NurseVerificationService>();
         services.AddScoped<INurseSearchService, NurseSearchService>();
         services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<IServiceCatalogService, ServiceCatalogService>();

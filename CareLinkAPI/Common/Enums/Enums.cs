@@ -80,3 +80,39 @@ public enum PaymentMethod
 {
     PayOS = 1
 }
+
+/// <summary>Vòng đời duyệt hồ sơ của Nurse</summary>
+public enum NurseVerificationStatus
+{
+    Unsubmitted = 0,
+    Pending = 1,
+    Approved = 2,
+    Rejected = 3,
+    Resubmitted = 4
+}
+
+/// <summary>Phân loại đối tượng Điều dưỡng</summary>
+public enum NursePractitionerType
+{
+    GraduateNurse = 1,
+    MedicalStudent = 2
+}
+
+/// <summary>Loại chứng từ: 1=CCCD_FRONT | 2=CCCD_BACK | 3=DEGREE | 4=LICENSE | 5=SELFIE | 6=STUDENT_CARD</summary>
+public enum NurseDocumentType
+{
+    CccdFront = 1,
+    CccdBack = 2,
+    Degree = 3,
+    License = 4,
+    Selfie = 5,
+    StudentCard = 6
+}
+
+/// <summary>Trạng thái duyệt của từng chứng từ: 0=Pending | 1=Approved | 2=Rejected</summary>
+public enum DocumentStatus
+{
+    Pending = 0,
+    Approved = 1,
+    Rejected = 2
+}

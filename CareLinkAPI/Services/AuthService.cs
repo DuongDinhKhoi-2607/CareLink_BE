@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using CareLinkAPI.Common.Enums;
 using CareLinkAPI.DTOs.Auth;
 using CareLinkAPI.Models;
 using Google.Apis.Auth;
@@ -15,12 +16,13 @@ public class AuthService : IAuthService
     private readonly CareLinkDbContext _db;
     private readonly IConfiguration _config;
 
-    // Role mapping (DB lưu int, trả về string cho client)
+    // Role mapping (DB lưu int theo UserRole, trả về string cho client)
     private static readonly Dictionary<int, string> RoleNames = new()
     {
-        { 0, "Customer" },
-        { 1, "Nurse" },
-        { 2, "Admin" }
+        { (int)UserRole.Admin, "Admin" },
+        { (int)UserRole.Customer, "Customer" },
+        { (int)UserRole.Nurse, "Nurse" },
+        { 0, "Customer" }
     };
 
     public AuthService(CareLinkDbContext db, IConfiguration config)
@@ -35,18 +37,47 @@ public class AuthService : IAuthService
         if (await _db.Users.AnyAsync(u => u.Email == request.Email))
             throw new InvalidOperationException("Email đã được sử dụng.");
 
+        var normalizedRole = (request.Role == 1 || request.Role == (int)UserRole.Nurse)
+            ? (int)UserRole.Nurse
+            : (int)UserRole.Customer;
+
         var user = new User
         {
             Id = Guid.NewGuid(),
             Email = request.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            Role = request.Role,
+            Role = normalizedRole,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
 
         _db.Users.Add(user);
+
+        if (normalizedRole == (int)UserRole.Nurse)
+        {
+            var nurse = new Nurse
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                FullName = request.Email.Split('@')[0],
+                Status = (int)NurseStatus.PendingVerification,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _db.Nurses.Add(nurse);
+        }
+        else
+        {
+            var customer = new Customer
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                FullName = request.Email.Split('@')[0]
+            };
+            _db.Customers.Add(customer);
+        }
+
         await _db.SaveChangesAsync();
 
         return await BuildAuthResponseAsync(user);
