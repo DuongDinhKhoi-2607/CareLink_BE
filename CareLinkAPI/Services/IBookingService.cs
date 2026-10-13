@@ -30,4 +30,7 @@ public interface IBookingService
 
     /// <summary>Book-07: auto-reject PendingAcceptance bookings the nurse did not answer in time. Returns the count.</summary>
     Task<int> AutoRejectExpiredAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Job-01: auto-cancel PendingPayment bookings that exceeded hold time (30 mins). Returns the count.</summary>
+    Task<int> AutoCancelUnpaidAsync(CancellationToken cancellationToken = default);
 }

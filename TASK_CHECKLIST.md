@@ -182,12 +182,12 @@ PendingAcceptance
 
 | ID | Mức độ | Trạng thái | Mô tả |
 |---|---|---|---|
-| Pay-01 | 🔴 MUST | ❌ | Tạo URL thanh toán qua **PayOS / VNPay / MoMo** cho Booking |
-| Pay-02 | 🔴 MUST | ❌ | **Webhook Receiver**: Bắt callback, verify chữ ký, chuyển → `PendingAcceptance` |
-| Pay-03 | 🔴 MUST | ❌ | **Ví nội bộ**: Khấu trừ phí sàn 50.000đ/ca, cộng doanh thu còn lại vào ví Nurse khi `Completed` |
-| Pay-04 | 🔴 MUST | ❌ | API Tạo yêu cầu **rút tiền** (Payout Request) về tài khoản ngân hàng |
-| Pay-05 | 🔴 MUST | ❌ | Admin duyệt giao dịch rút tiền (cập nhật mã tham chiếu ngân hàng) |
-| Pay-06 | 🔴 MUST | ❌ | API xử lý **Hoàn tiền (Refund)** khi Booking bị hủy hợp lệ |
+| Pay-01 | 🔴 MUST | ✅ | Tạo URL thanh toán qua **PayOS** cho Booking |
+| Pay-02 | 🔴 MUST | ✅ | **Webhook Receiver**: Bắt callback, verify chữ ký, chuyển → `PendingAcceptance` |
+| Pay-03 | 🔴 MUST | ✅ | **Ví nội bộ**: Khấu trừ phí sàn 50.000đ/ca, cộng doanh thu còn lại vào ví Nurse khi `Completed` |
+| Pay-04 | 🔴 MUST | ✅ | API Tạo yêu cầu **rút tiền** (Payout Request) về tài khoản ngân hàng |
+| Pay-05 | 🔴 MUST | ✅ | Admin duyệt giao dịch rút tiền (cập nhật mã tham chiếu ngân hàng) |
+| Pay-06 | 🔴 MUST | ✅ | API xử lý **Hoàn tiền (Refund)** khi Booking bị hủy hợp lệ |
 
 ---
 
@@ -195,10 +195,10 @@ PendingAcceptance
 
 | ID | Mức độ | Trạng thái | Mô tả |
 |---|---|---|---|
-| Job-01 | 🔴 MUST | ❌ | Auto-Cancel Unpaid Bookings: Quét mỗi 5 phút, hủy `PendingPayment` quá 30 phút |
-| Job-02 | 🔴 MUST | ❌ | Release Locked Slots: Tự động giải phóng khung giờ Nurse khi ca bị hủy |
-| Job-03 | 🔴 MUST | ❌ | Auto-Trigger Notifications: Kích hoạt thông báo mỗi khi Booking đổi trạng thái |
-| Job-04 | 🟠 SHOULD | ❌ | Auto-Reject Timeout: Tự động reject ca nếu Nurse không phản hồi trong 30 phút |
+| Job-01 | 🔴 MUST | ✅ | Auto-Cancel Unpaid Bookings: Quét định kỳ, hủy `PendingPayment` quá 30 phút |
+| Job-02 | 🔴 MUST | ✅ | Release Locked Slots: Tự động giải phóng khung giờ Nurse khi ca bị hủy |
+| Job-03 | 🔴 MUST | ✅ | Auto-Trigger Notifications: Kích hoạt thông báo mỗi khi Booking đổi trạng thái |
+| Job-04 | 🟠 SHOULD | ✅ | Auto-Reject Timeout: Tự động reject ca nếu Nurse không phản hồi trong 30 phút |
 
 ---
 

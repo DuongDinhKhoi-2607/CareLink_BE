@@ -28,6 +28,7 @@ builder.Services.AddDbContext<CareLinkDbContext>(options =>
 
 // Options
 builder.Services.Configure<BookingOptions>(builder.Configuration.GetSection(BookingOptions.SectionName));
+builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];

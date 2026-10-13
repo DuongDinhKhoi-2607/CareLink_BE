@@ -50,4 +50,13 @@ public interface IBookingRepository
         DateTime paidBeforeUtc,
         int take,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Job-01: PendingPayment bookings created on or before <paramref name="createdBeforeUtc"/>
+    /// (tracked, with Customer, Nurse and Payment loaded).
+    /// </summary>
+    Task<List<Booking>> GetExpiredPendingPaymentAsync(
+        DateTime createdBeforeUtc,
+        int take,
+        CancellationToken cancellationToken = default);
 }

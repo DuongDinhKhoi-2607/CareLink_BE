@@ -113,6 +113,23 @@ public class BookingRepository(CareLinkDbContext db) : IBookingRepository
             .ToListAsync(cancellationToken);
     }
 
+    public Task<List<Booking>> GetExpiredPendingPaymentAsync(
+        DateTime createdBeforeUtc,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        var pendingPayment = (int)BookingStatus.PendingPayment;
+
+        return db.Bookings
+            .Include(b => b.Customer)
+            .Include(b => b.Nurse)
+            .Include(b => b.Payment)
+            .Where(b => b.Status == pendingPayment && b.CreatedAt <= createdBeforeUtc)
+            .OrderBy(b => b.CreatedAt)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
     private static IQueryable<Booking> WithDetails(IQueryable<Booking> query) =>
         query
             .Include(b => b.Customer)
