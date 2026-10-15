@@ -17,4 +17,13 @@ public static class NotificationTypes
     public const string WalletCredited = "WALLET_CREDITED";
     public const string PayoutApproved = "PAYOUT_APPROVED";
     public const string PayoutRejected = "PAYOUT_REJECTED";
+
+    // Module 8: Chat & Proposal
+    public const string ProposalCreated = "PROPOSAL_CREATED";
+    public const string ProposalAccepted = "PROPOSAL_ACCEPTED";
+    public const string ProposalRejected = "PROPOSAL_REJECTED";
+
+    // Module 6: Nurse Verification
+    public const string NurseVerificationApproved = "NurseVerificationApproved";
+    public const string NurseVerificationRejected = "NurseVerificationRejected";
 }

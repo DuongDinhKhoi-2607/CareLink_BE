@@ -16,3 +16,6 @@ appsettings.Development.json
 
 # Logs
 *.log
+
+# Database migrations & local scripts
+*.sql

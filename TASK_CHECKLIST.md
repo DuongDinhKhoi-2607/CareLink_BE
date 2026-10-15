@@ -89,10 +89,10 @@ Id, NurseId (FK -> nurses.id), DocumentType, FileUrl, Status, AdminNote, AdminCh
 
 | ID | Mức độ | Trạng thái | Mô tả |
 |---|---|---|---|
-| Noti-01 | 🔴 MUST | ❌ | Tạo bản ghi Notification trong DB khi có sự kiện hệ thống |
-| Noti-02 | 🔴 MUST | ❌ | API Danh sách thông báo của User (phân trang, đánh dấu đã đọc) |
-| Noti-03 | 🟠 SHOULD | ❌ | Tích hợp **SignalR Hub** đẩy thông báo Real-time cho Web Client |
-| Noti-04 | 🟢 NICE | ❌ | Tích hợp Email Notification (SendGrid/SMTP) cho các sự kiện quan trọng |
+| Noti-01 | 🔴 MUST | ✅ | Tạo bản ghi Notification trong DB khi có sự kiện hệ thống (Booking, Payment, Wallet, Chat, Verification) |
+| Noti-02 | 🔴 MUST | ✅ | API Danh sách thông báo của User (phân trang, unread-count, đánh dấu đã đọc, đánh dấu tất cả) |
+| Noti-03 | 🟠 SHOULD | ⏳ | Tích hợp **SignalR Hub** đẩy thông báo Real-time cho Web Client |
+| Noti-04 | 🟢 NICE | ⏳ | Tích hợp Email Notification (SendGrid/SMTP) cho các sự kiện quan trọng |
 
 ---
 
