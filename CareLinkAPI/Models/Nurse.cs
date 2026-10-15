@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace CareLinkAPI.Models;
@@ -54,6 +54,8 @@ public partial class Nurse
     public virtual ICollection<NurseDocument> NurseDocuments { get; set; } = new List<NurseDocument>();
 
     public virtual ICollection<PayoutRequest> PayoutRequests { get; set; } = new List<PayoutRequest>();
+
+    public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual User User { get; set; } = null!;
 

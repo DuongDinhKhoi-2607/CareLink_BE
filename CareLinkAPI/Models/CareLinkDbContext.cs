@@ -51,6 +51,12 @@ public partial class CareLinkDbContext : DbContext
     public virtual DbSet<WalletTransaction> WalletTransactions { get; set; }
 
     public virtual DbSet<HandbookArticle> HandbookArticles { get; set; }
+ 
+    public virtual DbSet<Conversation> Conversations { get; set; }
+
+    public virtual DbSet<BookingProposal> BookingProposals { get; set; }
+
+    public virtual DbSet<Message> Messages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -161,6 +167,13 @@ public partial class CareLinkDbContext : DbContext
                 .HasDefaultValue(1)
                 .HasColumnName("status");
             entity.Property(e => e.TotalPrice).HasColumnName("total_price");
+
+            entity.Property(e => e.ConversationId).HasColumnName("conversation_id");
+
+            entity.HasOne(d => d.Conversation).WithMany(p => p.Bookings)
+                .HasForeignKey(d => d.ConversationId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_booking_conversation");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Bookings)
                 .HasForeignKey(d => d.CustomerId)
@@ -825,6 +838,168 @@ public partial class CareLinkDbContext : DbContext
                 .HasForeignKey(d => d.AuthorId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_handbook_author");
+        });
+
+        modelBuilder.Entity<Conversation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("conversations_pkey");
+
+            entity.ToTable("conversations");
+
+            entity.HasIndex(e => new { e.CustomerId, e.NurseId }, "uq_conversations_customer_nurse").IsUnique();
+
+            entity.HasIndex(e => e.CustomerId, "idx_conversations_customer");
+
+            entity.HasIndex(e => e.NurseId, "idx_conversations_nurse");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+            entity.Property(e => e.LastMessageAt).HasColumnName("last_message_at");
+            entity.Property(e => e.NurseId).HasColumnName("nurse_id");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Customer).WithMany(p => p.Conversations)
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_conversation_customer");
+
+            entity.HasOne(d => d.Nurse).WithMany(p => p.Conversations)
+                .HasForeignKey(d => d.NurseId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_conversation_nurse");
+        });
+
+        modelBuilder.Entity<BookingProposal>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("booking_proposals_pkey");
+
+            entity.ToTable("booking_proposals");
+
+            entity.HasIndex(e => new { e.ConversationId, e.ProposalNumber }, "uq_proposals_conv_number").IsUnique();
+
+            entity.HasIndex(e => new { e.ConversationId, e.Status }, "idx_proposals_conversation_status");
+
+            entity.HasIndex(e => e.BookingId, "uq_proposals_booking_id")
+                .IsUnique()
+                .HasFilter("(booking_id IS NOT NULL)");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.AddressId).HasColumnName("address_id");
+            entity.Property(e => e.AddressSnapshot)
+                .HasColumnType("character varying")
+                .HasColumnName("address_snapshot");
+            entity.Property(e => e.BookingId).HasColumnName("booking_id");
+            entity.Property(e => e.ConversationId).HasColumnName("conversation_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.LatitudeSnapshot)
+                .HasPrecision(10, 7)
+                .HasColumnName("latitude_snapshot");
+            entity.Property(e => e.LongitudeSnapshot)
+                .HasPrecision(10, 7)
+                .HasColumnName("longitude_snapshot");
+            entity.Property(e => e.Notes).HasColumnName("notes");
+            entity.Property(e => e.ProposalNumber)
+                .HasDefaultValue(1)
+                .HasColumnName("proposal_number");
+            entity.Property(e => e.RecipientId).HasColumnName("recipient_id");
+            entity.Property(e => e.RespondedAt).HasColumnName("responded_at");
+            entity.Property(e => e.ResponseNote).HasColumnName("response_note");
+            entity.Property(e => e.ScheduledEnd).HasColumnName("scheduled_end");
+            entity.Property(e => e.ScheduledStart).HasColumnName("scheduled_start");
+            entity.Property(e => e.SenderUserId).HasColumnName("sender_user_id");
+            entity.Property(e => e.ServiceId).HasColumnName("service_id");
+            entity.Property(e => e.Status)
+                .HasDefaultValue(1)
+                .HasColumnName("status");
+            entity.Property(e => e.TotalPrice).HasColumnName("total_price");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Address).WithMany()
+                .HasForeignKey(d => d.AddressId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_proposal_address");
+
+            entity.HasOne(d => d.Booking).WithMany(p => p.BookingProposals)
+                .HasForeignKey(d => d.BookingId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_proposal_booking");
+
+            entity.HasOne(d => d.Conversation).WithMany(p => p.BookingProposals)
+                .HasForeignKey(d => d.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_proposal_conversation");
+
+            entity.HasOne(d => d.Recipient).WithMany()
+                .HasForeignKey(d => d.RecipientId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_proposal_recipient");
+
+            entity.HasOne(d => d.SenderUser).WithMany(p => p.BookingProposals)
+                .HasForeignKey(d => d.SenderUserId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_proposal_sender_user");
+
+            entity.HasOne(d => d.Service).WithMany()
+                .HasForeignKey(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_proposal_service");
+        });
+
+        modelBuilder.Entity<Message>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("messages_pkey");
+
+            entity.ToTable("messages");
+
+            entity.HasIndex(e => new { e.ConversationId, e.CreatedAt }, "idx_messages_conversation_created");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.BookingId).HasColumnName("booking_id");
+            entity.Property(e => e.Content).HasColumnName("content");
+            entity.Property(e => e.ConversationId).HasColumnName("conversation_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.ProposalId).HasColumnName("proposal_id");
+            entity.Property(e => e.SenderUserId).HasColumnName("sender_user_id");
+            entity.Property(e => e.Type)
+                .HasDefaultValue(1)
+                .HasColumnName("type");
+
+            entity.HasOne(d => d.Booking).WithMany(p => p.Messages)
+                .HasForeignKey(d => d.BookingId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_message_booking");
+
+            entity.HasOne(d => d.Conversation).WithMany(p => p.Messages)
+                .HasForeignKey(d => d.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_message_conversation");
+
+            entity.HasOne(d => d.Proposal).WithMany(p => p.Messages)
+                .HasForeignKey(d => d.ProposalId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_message_proposal");
+
+            entity.HasOne(d => d.SenderUser).WithMany(p => p.Messages)
+                .HasForeignKey(d => d.SenderUserId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_message_sender_user");
         });
 
         OnModelCreatingPartial(modelBuilder);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace CareLinkAPI.Models;
@@ -43,6 +43,10 @@ public partial class Booking
 
     public DateTime CreatedAt { get; set; }
 
+    public Guid? ConversationId { get; set; }
+
+    public virtual Conversation? Conversation { get; set; }
+
     public virtual Customer Customer { get; set; } = null!;
 
     public virtual ICollection<Dispute> Disputes { get; set; } = new List<Dispute>();
@@ -60,4 +64,8 @@ public partial class Booking
     public virtual Service Service { get; set; } = null!;
 
     public virtual ICollection<WalletTransaction> WalletTransactions { get; set; } = new List<WalletTransaction>();
+
+    public virtual ICollection<BookingProposal> BookingProposals { get; set; } = new List<BookingProposal>();
+
+    public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 }

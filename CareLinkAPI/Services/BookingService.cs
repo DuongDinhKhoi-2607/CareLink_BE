@@ -26,6 +26,7 @@ public class BookingService(
     INotificationRepository notifications,
     IUserRepository users,
     IWalletService walletService,
+    IConversationRepository conversations,
     IUnitOfWork unitOfWork,
     IOptions<BookingOptions> options,
     ILogger<BookingService> logger) : IBookingService
@@ -332,6 +333,36 @@ public class BookingService(
                     booking.Id,
                     cancellationToken);
             }
+            else
+            {
+                // If an unpaid proposal booking is explicitly canceled, sync proposal to Expired and notify conversation
+                var proposal = await conversations.GetProposalByBookingIdAsync(booking.Id, asNoTracking: false, cancellationToken);
+                if (proposal is { Status: (int)ProposalStatus.Accepted })
+                {
+                    proposal.Status = (int)ProposalStatus.Expired;
+                    proposal.UpdatedAt = now;
+
+                    var systemMessage = new Message
+                    {
+                        Id = Guid.NewGuid(),
+                        ConversationId = proposal.ConversationId,
+                        SenderUserId = booking.Customer.UserId,
+                        Content = "Lịch hẹn đã bị hủy trước khi thanh toán. Đề xuất chăm sóc đã kết thúc.",
+                        Type = (int)MessageType.SystemNotification,
+                        ProposalId = proposal.Id,
+                        BookingId = booking.Id,
+                        CreatedAt = now
+                    };
+                    await conversations.AddMessageAsync(systemMessage, cancellationToken);
+
+                    var conv = await conversations.GetByIdAsync(proposal.ConversationId, asNoTracking: false, cancellationToken);
+                    if (conv != null)
+                    {
+                        conv.LastMessageAt = now;
+                        conv.UpdatedAt = now;
+                    }
+                }
+            }
         }, cancellationToken);
 
     // ───────────────────────── Book-07: auto reject ─────────────────────────
@@ -403,6 +434,34 @@ public class BookingService(
                     CanceledBy.System,
                     $"Hết hạn thanh toán quá {_options.PendingPaymentHoldMinutes} phút",
                     now);
+
+                // If booking belongs to a proposal, sync proposal to Expired and notify conversation
+                var proposal = await conversations.GetProposalByBookingIdAsync(booking.Id, asNoTracking: false, cancellationToken);
+                if (proposal is { Status: (int)ProposalStatus.Accepted })
+                {
+                    proposal.Status = (int)ProposalStatus.Expired;
+                    proposal.UpdatedAt = now;
+
+                    var systemMessage = new Message
+                    {
+                        Id = Guid.NewGuid(),
+                        ConversationId = proposal.ConversationId,
+                        SenderUserId = booking.Customer.UserId,
+                        Content = "Đề xuất đã hết hạn vì chưa hoàn tất thanh toán trong 30 phút. Lịch chăm sóc chưa được xác nhận.",
+                        Type = (int)MessageType.SystemNotification,
+                        ProposalId = proposal.Id,
+                        BookingId = booking.Id,
+                        CreatedAt = now
+                    };
+                    await conversations.AddMessageAsync(systemMessage, cancellationToken);
+
+                    var conv = await conversations.GetByIdAsync(proposal.ConversationId, asNoTracking: false, cancellationToken);
+                    if (conv != null)
+                    {
+                        conv.LastMessageAt = now;
+                        conv.UpdatedAt = now;
+                    }
+                }
 
                 await NotifyAsync(
                     booking.Customer.UserId,

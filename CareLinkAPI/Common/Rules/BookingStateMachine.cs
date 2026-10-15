@@ -8,12 +8,16 @@ namespace CareLinkAPI.Common.Rules;
 /// <code>
 /// PendingPayment -> PendingAcceptance -> Accepted -> InProgress -> Completed -> Disputed
 ///       |                  |                |
-///       +------------------+----------------+--> Canceled
+///       |                  +----------------+--> Canceled
+///       |                                   ^
+///       +--(proposal flow: nurse pre-agreed)+
+///       |
+///       +--(unpaid hold expired)-----------> Canceled
 /// </code>
 /// </summary>
 public static class BookingStateMachine
 {
-    private static readonly IReadOnlyDictionary<BookingStatus, BookingStatus[]> Transitions =
+    private static readonly IReadOnlyDictionary<BookingStatus, BookingStatus[]> StandardTransitions =
         new Dictionary<BookingStatus, BookingStatus[]>
         {
             [BookingStatus.PendingPayment] = [BookingStatus.PendingAcceptance, BookingStatus.Canceled],
@@ -26,7 +30,7 @@ public static class BookingStateMachine
         };
 
     public static bool CanTransition(BookingStatus from, BookingStatus to) =>
-        Transitions.TryGetValue(from, out var allowed) && allowed.Contains(to);
+        StandardTransitions.TryGetValue(from, out var allowed) && allowed.Contains(to);
 
     public static void EnsureCanTransition(BookingStatus from, BookingStatus to)
     {
@@ -35,6 +39,20 @@ public static class BookingStateMachine
             throw new ConflictException(
                 $"Booking in status '{from}' cannot be changed to '{to}'.");
         }
+    }
+
+    /// <summary>
+    /// Specialized transition check for the negotiated chat proposal flow where the caregiver has already
+    /// accepted the proposal before payment was made. Only valid when transitioning PendingPayment -> Accepted.
+    /// </summary>
+    public static void EnsureCanTransitionProposal(BookingStatus from, BookingStatus to)
+    {
+        if (from == BookingStatus.PendingPayment && to == BookingStatus.Accepted)
+        {
+            return;
+        }
+
+        EnsureCanTransition(from, to);
     }
 
     /// <summary>

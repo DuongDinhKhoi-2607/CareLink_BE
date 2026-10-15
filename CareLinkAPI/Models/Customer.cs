@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace CareLinkAPI.Models;
@@ -26,6 +26,8 @@ public partial class Customer
     public virtual ICollection<CareRecipient> CareRecipients { get; set; } = new List<CareRecipient>();
 
     public virtual ICollection<Dispute> Disputes { get; set; } = new List<Dispute>();
+
+    public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual User User { get; set; } = null!;
 }

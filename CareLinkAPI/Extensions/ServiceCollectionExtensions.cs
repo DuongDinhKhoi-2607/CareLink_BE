@@ -36,6 +36,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IWalletRepository, WalletRepository>();
         services.AddScoped<IPayoutRequestRepository, PayoutRequestRepository>();
 
+        // Module 8: Chat & Proposal
+        services.AddScoped<IConversationRepository, ConversationRepository>();
+
         return services;
     }
 
@@ -66,6 +69,12 @@ public static class ServiceCollectionExtensions
         // Module 7: Payment & Wallet
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IWalletService, WalletService>();
+
+        // Module 8: Chat & Proposal
+        services.AddScoped<IChatService, ChatService>();
+
+        // Module 4: Notification System
+        services.AddScoped<INotificationService, NotificationService>();
 
         return services;
     }

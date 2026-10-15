@@ -23,6 +23,7 @@ public class PaymentService(
     IUserRepository users,
     INotificationRepository notifications,
     IWalletService walletService,
+    IConversationRepository conversations,
     IUnitOfWork unitOfWork,
     IOptions<PayOsOptions> payOsOptions,
     IOptions<BookingOptions> bookingOptions,
@@ -199,7 +200,7 @@ public class PaymentService(
                 return 0;
             }
 
-            if (payment.Status != (int)PaymentStatus.Pending)
+            if (payment.Status == (int)PaymentStatus.Paid || payment.Status == (int)PaymentStatus.Refunded)
             {
                 logger.LogInformation("PayOS webhook for order {OrderCode} ignored (payment already {Status}).",
                     orderCode, (PaymentStatus)payment.Status);
@@ -230,38 +231,105 @@ public class PaymentService(
 
             if (booking.Status == (int)BookingStatus.PendingPayment)
             {
-                BookingStateMachine.EnsureCanTransition(BookingStatus.PendingPayment, BookingStatus.PendingAcceptance);
-                booking.Status = (int)BookingStatus.PendingAcceptance;
+                // Check if this booking was created from an accepted proposal
+                var proposal = await conversations.GetProposalByBookingIdAsync(booking.Id, asNoTracking: false, cancellationToken);
 
-                await NotifyAsync(
-                    booking.Customer.UserId,
-                    "Thanh toán thành công",
-                    $"Bạn đã thanh toán {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. " +
-                    "Đang chờ điều dưỡng xác nhận.",
-                    NotificationTypes.PaymentSucceeded,
-                    booking.Id,
-                    cancellationToken);
+                var isProposalBooking = proposal != null
+                    && proposal.ConversationId == booking.ConversationId
+                    && proposal.Status == (int)ProposalStatus.Accepted;
 
-                await NotifyAsync(
-                    booking.Nurse.UserId,
-                    "Bạn có lịch hẹn mới",
-                    $"Có yêu cầu chăm sóc mới lúc {FormatTime(booking.ScheduledStart)}. " +
-                    $"Vui lòng phản hồi trong {_booking.NurseAcceptTimeoutMinutes} phút.",
-                    NotificationTypes.BookingNewRequest,
-                    booking.Id,
-                    cancellationToken);
+                if (isProposalBooking)
+                {
+                    // Caregiver already accepted this proposal in advance.
+                    // Transition directly from PendingPayment -> Accepted using guarded proposal transition.
+                    BookingStateMachine.EnsureCanTransitionProposal(BookingStatus.PendingPayment, BookingStatus.Accepted);
+                    booking.Status = (int)BookingStatus.Accepted;
+                    booking.AcceptedAt = now;
+
+                    // Update proposal to BookedAndPaid
+                    proposal!.Status = (int)ProposalStatus.BookedAndPaid;
+                    proposal.UpdatedAt = now;
+
+                    // Post system message in the conversation
+                    var eventMessage = new Message
+                    {
+                        Id = Guid.NewGuid(),
+                        ConversationId = proposal.ConversationId,
+                        SenderUserId = booking.Customer.UserId,
+                        Content = $"Gia đình đã thanh toán thành công {Money(payment.Amount)} qua PayOS. Lịch chăm sóc đã được xác nhận.",
+                        Type = (int)MessageType.SystemNotification,
+                        ProposalId = proposal.Id,
+                        BookingId = booking.Id,
+                        CreatedAt = now
+                    };
+                    await conversations.AddMessageAsync(eventMessage, cancellationToken);
+
+                    var conversation = await conversations.GetByIdAsync(proposal.ConversationId, asNoTracking: false, cancellationToken);
+                    if (conversation != null)
+                    {
+                        conversation.LastMessageAt = now;
+                        conversation.UpdatedAt = now;
+                    }
+
+                    await NotifyAsync(
+                        booking.Customer.UserId,
+                        "Thanh toán thành công - Lịch hẹn đã xác nhận",
+                        $"Bạn đã thanh toán {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Lịch chăm sóc đã được xác nhận.",
+                        NotificationTypes.PaymentSucceeded,
+                        booking.Id,
+                        cancellationToken);
+
+                    await NotifyAsync(
+                        booking.Nurse.UserId,
+                        "Lịch hẹn đã được xác nhận",
+                        $"Khách hàng đã hoàn tất thanh toán cho đề xuất #{proposal.ProposalNumber} lúc {FormatTime(booking.ScheduledStart)}. Ca chăm sóc đã được xác nhận.",
+                        NotificationTypes.BookingAccepted,
+                        booking.Id,
+                        cancellationToken);
+                }
+                else
+                {
+                    if (booking.ConversationId.HasValue && proposal == null)
+                    {
+                        logger.LogWarning("Booking {BookingId} has ConversationId {ConversationId} but no valid linked proposal found.",
+                            booking.Id, booking.ConversationId);
+                    }
+
+                    // Direct booking flow (requires caregiver acceptance after payment)
+                    BookingStateMachine.EnsureCanTransition(BookingStatus.PendingPayment, BookingStatus.PendingAcceptance);
+                    booking.Status = (int)BookingStatus.PendingAcceptance;
+
+                    await NotifyAsync(
+                        booking.Customer.UserId,
+                        "Thanh toán thành công",
+                        $"Bạn đã thanh toán {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. " +
+                        "Đang chờ điều dưỡng xác nhận.",
+                        NotificationTypes.PaymentSucceeded,
+                        booking.Id,
+                        cancellationToken);
+
+                    await NotifyAsync(
+                        booking.Nurse.UserId,
+                        "Bạn có lịch hẹn mới",
+                        $"Có yêu cầu chăm sóc mới lúc {FormatTime(booking.ScheduledStart)}. " +
+                        $"Vui lòng phản hồi trong {_booking.NurseAcceptTimeoutMinutes} phút.",
+                        NotificationTypes.BookingNewRequest,
+                        booking.Id,
+                        cancellationToken);
+                }
             }
             else
             {
-                // Paid after the booking was already canceled (e.g. hold time expired) → full refund.
-                payment.Status = (int)PaymentStatus.Refunded;
-                payment.RefundedAmount = payment.Amount;
-                payment.RefundedAt = now;
+                // Payment arrived after the booking was already canceled (e.g. timeout expired or manual cancellation).
+                // Do NOT mark payment as Refunded because gateway automated refund has not executed.
+                // Payment remains in status Paid, signaling that money was collected and requires manual/admin refund.
+                logger.LogWarning("PayOS order {OrderCode} paid for already CANCELED booking {BookingId}. Payment recorded as Paid, pending manual refund.",
+                    orderCode, booking.Id);
 
                 await NotifyAsync(
                     booking.Customer.UserId,
-                    "Lịch hẹn đã hủy – sẽ hoàn tiền",
-                    $"Thanh toán {Money(payment.Amount)} đến sau khi lịch hẹn đã bị hủy. Bạn sẽ được hoàn lại toàn bộ.",
+                    "Thanh toán được ghi nhận cho lịch hẹn đã hủy",
+                    $"Giao dịch {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)} đã được ghi nhận sau khi lịch bị hủy. Khoản tiền đang chờ xử lý hoàn trả. Vui lòng liên hệ hỗ trợ hoặc chờ Admin hoàn tiền.",
                     NotificationTypes.PaymentRefunded,
                     booking.Id,
                     cancellationToken);
