@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace CareLinkAPI.Models;
@@ -42,4 +42,8 @@ public partial class User
     public virtual ICollection<Review> ReviewReviewees { get; set; } = new List<Review>();
 
     public virtual ICollection<Review> ReviewReviewers { get; set; } = new List<Review>();
+
+    public virtual ICollection<BookingProposal> BookingProposals { get; set; } = new List<BookingProposal>();
+
+    public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 }

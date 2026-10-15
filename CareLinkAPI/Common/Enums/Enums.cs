@@ -116,3 +116,23 @@ public enum DocumentStatus
     Approved = 1,
     Rejected = 2
 }
+
+/// <summary>booking_proposals.status: 1=Pending | 2=Accepted | 3=Rejected | 4=Superseded | 5=Expired | 6=BookedAndPaid</summary>
+public enum ProposalStatus
+{
+    Pending = 1,
+    Accepted = 2,
+    Rejected = 3,
+    Superseded = 4,
+    Expired = 5,
+    BookedAndPaid = 6
+}
+
+/// <summary>messages.type: 1=Text | 2=ProposalCard | 3=ProposalResponse | 4=SystemNotification</summary>
+public enum MessageType
+{
+    Text = 1,
+    ProposalCard = 2,
+    ProposalResponse = 3,
+    SystemNotification = 4
+}
