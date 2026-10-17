@@ -693,7 +693,7 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.RefreshToken).HasColumnName("refresh_token");
             entity.Property(e => e.RefreshTokenExpiry).HasColumnName("refresh_token_expiry");
             entity.Property(e => e.ResetPasswordOtp)
-                .HasMaxLength(6)
+                .HasMaxLength(100)
                 .HasColumnName("reset_password_otp");
             entity.Property(e => e.ResetPasswordOtpExpiry).HasColumnName("reset_password_otp_expiry");
             entity.Property(e => e.Role)

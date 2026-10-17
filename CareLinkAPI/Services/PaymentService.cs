@@ -97,8 +97,8 @@ public class PaymentService(
                 Amount = (long)decimal.Round(amount, 0, MidpointRounding.AwayFromZero),
                 // PayOS limits the description to 25 characters.
                 Description = $"CL {booking.Id.ToString("N")[..8].ToUpperInvariant()}",
-                ReturnUrl = _payOs.ReturnUrl,
-                CancelUrl = _payOs.CancelUrl,
+                ReturnUrl = _payOs.ReturnUrl.Contains('?') ? $"{_payOs.ReturnUrl}&bookingId={booking.Id}" : $"{_payOs.ReturnUrl}?bookingId={booking.Id}",
+                CancelUrl = _payOs.CancelUrl.Contains('?') ? $"{_payOs.CancelUrl}&bookingId={booking.Id}" : $"{_payOs.CancelUrl}?bookingId={booking.Id}",
                 BuyerName = customer.FullName,
                 BuyerPhone = customer.Phone,
                 ExpiredAt = new DateTimeOffset(holdUntil, TimeSpan.Zero).ToUnixTimeSeconds(),
