@@ -113,8 +113,12 @@ public class AuthController : ControllerBase
     [ProducesResponseType(200)]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
-        await _authService.ForgotPasswordAsync(request.Email);
-        return Ok(new { message = "Nếu email tồn tại, OTP đã được gửi." });
+        var otp = await _authService.ForgotPasswordAsync(request.Email);
+        return Ok(new 
+        { 
+            message = "Nếu email tồn tại, OTP đã được gửi.",
+            devOtp = otp
+        });
     }
 
     /// <summary>Đặt lại mật khẩu bằng OTP</summary>
