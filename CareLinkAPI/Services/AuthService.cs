@@ -15,6 +15,8 @@ public class AuthService : IAuthService
 {
     private readonly CareLinkDbContext _db;
     private readonly IConfiguration _config;
+    private readonly IEmailService _emailService;
+    private readonly ILogger<AuthService> _logger;
 
     // Role mapping (DB lưu int theo UserRole, trả về string cho client)
     private static readonly Dictionary<int, string> RoleNames = new()
@@ -25,16 +27,23 @@ public class AuthService : IAuthService
         { 0, "Customer" }
     };
 
-    public AuthService(CareLinkDbContext db, IConfiguration config)
+    public AuthService(
+        CareLinkDbContext db,
+        IConfiguration config,
+        IEmailService emailService,
+        ILogger<AuthService> logger)
     {
         _db = db;
         _config = config;
+        _emailService = emailService;
+        _logger = logger;
     }
 
     // ─── REGISTER ─────────────────────────────────────────────────────────────
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
     {
-        if (await _db.Users.AnyAsync(u => u.Email == request.Email))
+        var normalizedEmail = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
+        if (await _db.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail))
             throw new InvalidOperationException("Email đã được sử dụng.");
 
         var normalizedRole = (request.Role == 1 || request.Role == (int)UserRole.Nurse)
@@ -44,7 +53,7 @@ public class AuthService : IAuthService
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Email = request.Email,
+            Email = normalizedEmail,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             Role = normalizedRole,
             IsActive = true,
@@ -86,7 +95,8 @@ public class AuthService : IAuthService
     // ─── LOGIN ─────────────────────────────────────────────────────────────────
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email)
+        var normalizedEmail = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail)
             ?? throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng.");
 
         if (string.IsNullOrEmpty(user.PasswordHash))
@@ -119,30 +129,110 @@ public class AuthService : IAuthService
             throw new UnauthorizedAccessException("Google token không hợp lệ.");
         }
 
-        var email = payload.Email;
+        var email = (payload.Email ?? string.Empty).Trim().ToLowerInvariant();
+        var displayName = !string.IsNullOrWhiteSpace(payload.Name)
+            ? payload.Name.Trim()
+            : email.Split('@')[0];
+
+        // Chuẩn hóa role: 1 hoặc Nurse (3) -> Nurse (3), 0 hoặc Customer (2) -> Customer (2)
+        var normalizedRole = (request.Role == 1 || request.Role == (int)UserRole.Nurse)
+            ? (int)UserRole.Nurse
+            : (int)UserRole.Customer;
 
         // Tìm hoặc tạo user mới
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
 
         if (user is null)
         {
-            // Lần đầu đăng nhập bằng Google → tạo tài khoản mới
+            // Lần đầu đăng nhập bằng Google → tạo tài khoản mới với vai trò chính xác
             user = new User
             {
                 Id = Guid.NewGuid(),
                 Email = email,
                 PasswordHash = null, // Không có password vì dùng Google
-                Role = request.Role,
+                Role = normalizedRole,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
             _db.Users.Add(user);
+
+            if (normalizedRole == (int)UserRole.Nurse)
+            {
+                var nurse = new Nurse
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    FullName = displayName,
+                    AvatarUrl = payload.Picture,
+                    Status = (int)NurseStatus.PendingVerification,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _db.Nurses.Add(nurse);
+            }
+            else
+            {
+                var customer = new Customer
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    FullName = displayName,
+                    AvatarUrl = payload.Picture
+                };
+                _db.Customers.Add(customer);
+            }
+
             await _db.SaveChangesAsync();
         }
-        else if (!user.IsActive)
+        else
         {
-            throw new UnauthorizedAccessException("Tài khoản đã bị vô hiệu hoá.");
+            if (!user.IsActive)
+            {
+                throw new UnauthorizedAccessException("Tài khoản đã bị vô hiệu hoá.");
+            }
+
+            bool changed = false;
+
+            // Tự động sửa lỗi nếu tài khoản Google trước đó bị gán nhầm role 1 (Admin) do lỗi role mapping
+            if (user.Role == (int)UserRole.Admin && user.PasswordHash == null && request.Role == 1)
+            {
+                user.Role = (int)UserRole.Nurse;
+                user.UpdatedAt = DateTime.UtcNow;
+                changed = true;
+            }
+
+            // Đảm bảo tài khoản luôn có hồ sơ Nurse/Customer tương ứng
+            if (user.Role == (int)UserRole.Nurse && !await _db.Nurses.AnyAsync(n => n.UserId == user.Id))
+            {
+                _db.Nurses.Add(new Nurse
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    FullName = displayName,
+                    AvatarUrl = payload.Picture,
+                    Status = (int)NurseStatus.PendingVerification,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+                changed = true;
+            }
+            else if (user.Role == (int)UserRole.Customer && !await _db.Customers.AnyAsync(c => c.UserId == user.Id))
+            {
+                _db.Customers.Add(new Customer
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    FullName = displayName,
+                    AvatarUrl = payload.Picture
+                });
+                changed = true;
+            }
+
+            if (changed)
+            {
+                await _db.SaveChangesAsync();
+            }
         }
 
         return await BuildAuthResponseAsync(user);
@@ -172,40 +262,63 @@ public class AuthService : IAuthService
     }
 
     // ─── FORGOT PASSWORD ───────────────────────────────────────────────────────
-    public async Task ForgotPasswordAsync(string email)
+    public async Task<string?> ForgotPasswordAsync(string email)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
-        if (user is null) return; // Không tiết lộ email có tồn tại hay không
+        var normalizedEmail = (email ?? string.Empty).Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+        if (user is null)
+        {
+            try
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"⚠️ [CareLink Auth] Yêu cầu gửi OTP cho email KHÔNG TỒN TẠI trong database: '{email}'");
+                Console.ResetColor();
+            }
+            catch {}
+            return null; // Không tiết lộ email có tồn tại hay không ra ngoài public message
+        }
 
         var otp = GenerateOtp();
         user.ResetPasswordOtp = BCrypt.Net.BCrypt.HashPassword(otp);
-        user.ResetPasswordOtpExpiry = DateTime.UtcNow.AddMinutes(10);
+        user.ResetPasswordOtpExpiry = DateTime.UtcNow.AddMinutes(15);
         user.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        // TODO: Gửi OTP qua email (tích hợp SendGrid/SMTP ở Noti-04)
-        // Tạm thời log ra console cho dev
-        Console.WriteLine($"[DEV] OTP cho {email}: {otp}");
+        // Gửi email thật nếu có cấu hình SMTP, và luôn in ra console terminal cho tài khoản test
+        await _emailService.SendPasswordResetOtpAsync(user.Email, otp);
+
+        return otp;
     }
 
     // ─── RESET PASSWORD ────────────────────────────────────────────────────────
     public async Task ResetPasswordAsync(ResetPasswordRequest request)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email)
-            ?? throw new InvalidOperationException("Email không tồn tại.");
+        var normalizedEmail = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail)
+            ?? throw new InvalidOperationException("Email không tồn tại trong hệ thống.");
 
         if (string.IsNullOrEmpty(user.ResetPasswordOtp) ||
             user.ResetPasswordOtpExpiry < DateTime.UtcNow)
-            throw new InvalidOperationException("OTP không hợp lệ hoặc đã hết hạn.");
+            throw new InvalidOperationException("Mã OTP không hợp lệ hoặc đã hết hạn (thời hạn 15 phút).");
 
-        if (!BCrypt.Net.BCrypt.Verify(request.Otp, user.ResetPasswordOtp))
-            throw new InvalidOperationException("OTP không đúng.");
+        if (!BCrypt.Net.BCrypt.Verify(request.Otp.Trim(), user.ResetPasswordOtp))
+            throw new InvalidOperationException("Mã OTP không chính xác. Vui lòng kiểm tra lại.");
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         user.ResetPasswordOtp = null;
         user.ResetPasswordOtpExpiry = null;
+        user.RefreshToken = null; // Buộc thu hồi refresh token để yêu cầu đăng nhập lại
+        user.RefreshTokenExpiry = null;
         user.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        try
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"✅ [CareLink Auth] Đặt lại mật khẩu thành công cho email: '{user.Email}'. Mật khẩu mới đã được cập nhật!");
+            Console.ResetColor();
+        }
+        catch {}
     }
 
     // ─── HELPERS ───────────────────────────────────────────────────────────────
