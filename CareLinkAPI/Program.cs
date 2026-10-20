@@ -10,11 +10,27 @@ using CareLinkAPI.Middlewares;
 using CareLinkAPI.Models;
 using CareLinkAPI.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Cloud environments like Render provide dynamic PORT via environment variable
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
+// Reverse proxy forwarded headers (Render, Nginx, Docker)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // DbContext
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -139,10 +155,11 @@ builder.Services.AddOpenApi(options =>
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Configure OpenAPI & Swagger UI (enabled in Development or if EnableSwagger is true)
+if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("EnableSwagger", true))
 {
     app.MapOpenApi();
     app.UseSwaggerUI(options =>
@@ -150,7 +167,10 @@ if (app.Environment.IsDevelopment())
         options.SwaggerEndpoint("/openapi/v1.json", "CareLink API v1");
         options.RoutePrefix = "swagger";
     });
+}
 
+if (app.Environment.IsDevelopment())
+{
     // Idempotent service seed execution (Only runs in Development, protects Production)
     using var scope = app.Services.CreateScope();
     var context = scope.ServiceProvider.GetService<CareLinkDbContext>();
@@ -166,6 +186,9 @@ app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Redirect root to /swagger for easy testing
+app.MapGet("/", () => Results.Redirect("/swagger"));
 
 app.MapControllers();
 
