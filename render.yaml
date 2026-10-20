@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: carelink-be
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /swagger
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: EnableSwagger
+        value: "true"
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: CareLink
+      - key: Jwt__Audience
+        value: CareLink
+      - key: Jwt__AccessTokenExpiryMinutes
+        value: "60"
+      - key: Jwt__RefreshTokenExpiryDays
+        value: "30"
+      - key: Google__ClientId
+        sync: false
+      - key: PayOS__ClientId
+        sync: false
+      - key: PayOS__ApiKey
+        sync: false
+      - key: PayOS__ChecksumKey
+        sync: false
+      - key: PayOS__ReturnUrl
+        sync: false
+      - key: PayOS__CancelUrl
+        sync: false
