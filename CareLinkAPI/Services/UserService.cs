@@ -132,16 +132,16 @@ public class UserService(
     }
 
     private static bool IsCustomerRole(int role) =>
-        role == (int)UserRole.Customer || role == 0 || role == 2;
+        role == (int)UserRole.Customer || role == 0;
 
     private static bool IsNurseRole(int role) =>
-        role == (int)UserRole.Nurse || role == 1 || role == 3;
+        role == (int)UserRole.Nurse;
 
     private static string GetRoleName(int role) => role switch
     {
         (int)UserRole.Admin => "Admin",
+        (int)UserRole.Nurse => "Nurse",
         (int)UserRole.Customer or 0 => "Customer",
-        (int)UserRole.Nurse or 1 => "Nurse",
         _ => "Customer"
     };
 
