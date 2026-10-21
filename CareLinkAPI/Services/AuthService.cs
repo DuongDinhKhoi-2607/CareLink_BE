@@ -321,6 +321,45 @@ public class AuthService : IAuthService
         catch {}
     }
 
+    // ─── CHANGE PASSWORD ───────────────────────────────────────────────────────
+    public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
+    {
+        var user = await _db.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("Tài khoản người dùng không tồn tại.");
+
+        if (string.IsNullOrEmpty(user.PasswordHash))
+        {
+            throw new InvalidOperationException("Tài khoản này được đăng nhập bằng Google. Vui lòng sử dụng tài khoản Google để đăng nhập.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new UnauthorizedAccessException("Mật khẩu hiện tại không chính xác.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 6)
+        {
+            throw new InvalidOperationException("Mật khẩu mới phải có ít nhất 6 ký tự.");
+        }
+
+        if (BCrypt.Net.BCrypt.Verify(request.NewPassword, user.PasswordHash))
+        {
+            throw new InvalidOperationException("Mật khẩu mới không được trùng với mật khẩu hiện tại.");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        try
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"✅ [CareLink Auth] Đổi mật khẩu thành công cho email: '{user.Email}'.");
+            Console.ResetColor();
+        }
+        catch {}
+    }
+
     // ─── HELPERS ───────────────────────────────────────────────────────────────
 
     private async Task<AuthResponse> BuildAuthResponseAsync(User user)

@@ -11,9 +11,13 @@ public class BookingResponse
 
     public Guid CustomerId { get; init; }
     public string CustomerName { get; init; } = null!;
+    public string? CustomerAvatarUrl { get; init; }
+    public string? CustomerPhone { get; init; }
 
     public Guid NurseId { get; init; }
     public string NurseName { get; init; } = null!;
+    public string? NurseAvatarUrl { get; init; }
+    public string? NursePhone { get; init; }
 
     public Guid RecipientId { get; init; }
     public string RecipientName { get; init; } = null!;
@@ -52,8 +56,12 @@ public static class BookingMappings
         Status = (BookingStatus)b.Status,
         CustomerId = b.CustomerId,
         CustomerName = b.Customer.FullName,
+        CustomerAvatarUrl = b.Customer.AvatarUrl,
+        CustomerPhone = b.Customer.Phone,
         NurseId = b.NurseId,
         NurseName = b.Nurse.FullName,
+        NurseAvatarUrl = b.Nurse.AvatarUrl,
+        NursePhone = b.Nurse.Phone,
         RecipientId = b.RecipientId,
         RecipientName = b.Recipient.FullName,
         ServiceId = b.ServiceId,
