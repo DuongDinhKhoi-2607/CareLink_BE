@@ -18,4 +18,9 @@ appsettings.Development.json
 *.log
 
 # Database migrations & local scripts
-*.sql
+*.sql
+
+# Internal local docs
+FE_BE_GAP_ANALYSIS.md
+FE_BE_GAP_ANALYSIS*.md
+*gap*be*fe*.md

@@ -37,4 +37,6 @@ public class ChangePasswordRequest
     [Required]
     [MinLength(6)]
     public string NewPassword { get; set; } = null!;
+
+    public string? ConfirmPassword { get; set; }
 }
