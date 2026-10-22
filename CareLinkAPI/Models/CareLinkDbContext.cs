@@ -34,6 +34,8 @@ public partial class CareLinkDbContext : DbContext
 
     public virtual DbSet<NurseAvailability> NurseAvailabilities { get; set; }
 
+    public virtual DbSet<NurseUnavailability> NurseUnavailabilities { get; set; }
+
     public virtual DbSet<NurseDocument> NurseDocuments { get; set; }
 
     public virtual DbSet<Payment> Payments { get; set; }
@@ -163,6 +165,13 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.ScheduledStart).HasColumnName("scheduled_start");
             entity.Property(e => e.ServiceId).HasColumnName("service_id");
             entity.Property(e => e.StartedAt).HasColumnName("started_at");
+            entity.Property(e => e.CheckInLatitude)
+                .HasPrecision(10, 7)
+                .HasColumnName("checkin_latitude");
+            entity.Property(e => e.CheckInLongitude)
+                .HasPrecision(10, 7)
+                .HasColumnName("checkin_longitude");
+            entity.Property(e => e.CheckInNote).HasColumnName("checkin_note");
             entity.Property(e => e.Status)
                 .HasDefaultValue(1)
                 .HasColumnName("status");
@@ -225,6 +234,9 @@ public partial class CareLinkDbContext : DbContext
                 .HasColumnName("longitude");
             entity.Property(e => e.MedicalHistory).HasColumnName("medical_history");
             entity.Property(e => e.SpecialNotes).HasColumnName("special_notes");
+            entity.Property(e => e.IsDeleted)
+                .HasDefaultValue(false)
+                .HasColumnName("is_deleted");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.CareRecipients)
                 .HasForeignKey(d => d.CustomerId)
@@ -421,6 +433,12 @@ public partial class CareLinkDbContext : DbContext
                 .HasDefaultValue(10)
                 .HasColumnName("service_radius_km");
             entity.Property(e => e.Status).HasColumnName("status");
+            entity.Property(e => e.PractitionerType)
+                .HasDefaultValue(1)
+                .HasColumnName("practitioner_type");
+            entity.Property(e => e.IsAcceptingBookings)
+                .HasDefaultValue(true)
+                .HasColumnName("is_accepting_bookings");
             entity.Property(e => e.TotalReviews).HasColumnName("total_reviews");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
@@ -457,6 +475,32 @@ public partial class CareLinkDbContext : DbContext
             entity.HasOne(d => d.Nurse).WithMany(p => p.NurseAvailabilities)
                 .HasForeignKey(d => d.NurseId)
                 .HasConstraintName("fk_availability_nurse");
+        });
+
+        modelBuilder.Entity<NurseUnavailability>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("nurse_unavailabilities_pkey");
+
+            entity.ToTable("nurse_unavailabilities");
+
+            entity.HasIndex(e => new { e.NurseId, e.Date }, "uq_nurse_unavailability_date").IsUnique();
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.NurseId).HasColumnName("nurse_id");
+            entity.Property(e => e.Date).HasColumnName("date");
+            entity.Property(e => e.Reason)
+                .HasColumnType("character varying")
+                .HasColumnName("reason");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Nurse).WithMany(p => p.NurseUnavailabilities)
+                .HasForeignKey(d => d.NurseId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_unavailability_nurse");
         });
 
         modelBuilder.Entity<NurseDocument>(entity =>
@@ -657,6 +701,9 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
+            entity.Property(e => e.RequiresLicense)
+                .HasDefaultValue(false)
+                .HasColumnName("requires_license");
             entity.Property(e => e.RequiredSkills).HasColumnName("required_skills");
             entity.Property(e => e.ServiceName)
                 .HasColumnType("character varying")

@@ -22,6 +22,9 @@ public class NurseProfileResponse
     public string? WorkDistrict { get; set; }
     public decimal AverageRating { get; set; }
     public int TotalReviews { get; set; }
+    public int PractitionerType { get; set; } = 1;
+    public string PractitionerTypeName { get; set; } = "GraduateNurse";
+    public bool IsAcceptingBookings { get; set; } = true;
     public NurseStatus Status { get; set; }
     public string StatusName { get; set; } = null!;
     public DateTime CreatedAt { get; set; }

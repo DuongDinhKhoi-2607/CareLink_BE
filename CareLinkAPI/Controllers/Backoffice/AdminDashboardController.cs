@@ -1,9 +1,11 @@
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Services.Backoffice;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CareLinkAPI.Controllers.Backoffice;
 
+[Authorize(Roles = "Admin")]
 [ApiController]
 [Route("api/v1/admin/dashboard")]
 public class AdminDashboardController : ControllerBase
@@ -16,7 +18,7 @@ public class AdminDashboardController : ControllerBase
     }
 
     /// <summary>
-    /// Thống kê tổng quan Admin Dashboard (GMV, Phí nền tảng 50.000đ/ca, Số lượng ca theo trạng thái, Khiếu nại, Đánh giá)
+    /// Thống kê tổng quan Admin Dashboard (GMV, Phí nền tảng 60.000đ/ca, Số lượng ca theo trạng thái, Khiếu nại, Đánh giá)
     /// </summary>
     [HttpGet("summary")]
     public async Task<ActionResult<DashboardSummaryDto>> GetSummary(CancellationToken ct)

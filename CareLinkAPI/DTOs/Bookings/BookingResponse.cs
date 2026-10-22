@@ -34,6 +34,10 @@ public class BookingResponse
     public decimal? Latitude { get; init; }
     public decimal? Longitude { get; init; }
 
+    public decimal? CheckInLatitude { get; init; }
+    public decimal? CheckInLongitude { get; init; }
+    public string? CheckInNote { get; init; }
+
     public PaymentStatus? PaymentStatus { get; init; }
     public decimal? RefundedAmount { get; init; }
 
@@ -72,6 +76,9 @@ public static class BookingMappings
         AddressSnapshot = b.AddressSnapshot,
         Latitude = b.LatitudeSnapshot,
         Longitude = b.LongitudeSnapshot,
+        CheckInLatitude = b.CheckInLatitude,
+        CheckInLongitude = b.CheckInLongitude,
+        CheckInNote = b.CheckInNote,
         PaymentStatus = b.Payment is null ? null : (PaymentStatus)b.Payment.Status,
         RefundedAmount = b.Payment?.RefundedAmount,
         CancelReason = b.CancelReason,

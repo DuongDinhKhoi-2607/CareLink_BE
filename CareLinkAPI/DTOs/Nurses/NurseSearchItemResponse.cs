@@ -22,6 +22,10 @@ public class NurseSearchItemResponse
 
     public int TotalReviews { get; init; }
 
+    public int PractitionerType { get; init; } = 1;
+
+    public string PractitionerTypeName { get; init; } = "GraduateNurse";
+
     /// <summary>Haversine distance from the customer in km (null when no coordinates were supplied).</summary>
     public double? DistanceKm { get; init; }
 }

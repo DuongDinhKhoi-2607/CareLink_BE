@@ -1,3 +1,4 @@
+using CareLinkAPI.Common.Enums;
 using CareLinkAPI.Common.Exceptions;
 using CareLinkAPI.Common.Models;
 using CareLinkAPI.Common.Options;
@@ -12,6 +13,7 @@ namespace CareLinkAPI.Services;
 public class NurseSearchService(
     INurseRepository nurses,
     INurseAvailabilityRepository availabilities,
+    INurseUnavailabilityRepository unavailabilities,
     IBookingRepository bookings,
     IServiceRepository services,
     IOptions<BookingOptions> options) : INurseSearchService
@@ -21,12 +23,43 @@ public class NurseSearchService(
         CancellationToken cancellationToken = default)
     {
         ValidateLocation(request);
-        var window = await ResolveTimeWindowAsync(request, cancellationToken);
+
+        Service? service = null;
+        if (request.ServiceId.HasValue)
+        {
+            service = await services.GetByIdAsync(request.ServiceId.Value, cancellationToken)
+                      ?? throw new NotFoundException("Service not found.");
+
+            if (!service.IsActive)
+            {
+                throw new BadRequestException("Service is not available.");
+            }
+        }
+
+        var window = ResolveTimeWindow(request, service);
 
         var candidates = await nurses.SearchActiveAsync(request.District, request.MinRating, cancellationToken);
 
+        // Filter 1: Only nurses currently accepting bookings (Luồng 2)
+        candidates = candidates.Where(n => n.IsAcceptingBookings).ToList();
+
+        // Filter 2: Clinical services requiring a license can only be done by Graduate Nurses (Luồng 1)
+        if (service != null && service.RequiresLicense)
+        {
+            candidates = candidates.Where(n => n.PractitionerType != (int)NursePractitionerType.MedicalStudent).ToList();
+        }
+
+        // Filter 3: Blackout dates & Availability slots & Overlapping bookings (Luồng 2)
         if (window is not null && candidates.Count > 0)
         {
+            var localDate = DateOnly.FromDateTime(VietnamTime.ToLocal(window.Value.StartUtc));
+            var candidateIds = candidates.Select(n => n.Id).ToList();
+            var blockedIds = await unavailabilities.GetBlockedNurseIdsOnDateAsync(localDate, candidateIds, cancellationToken);
+            if (blockedIds.Count > 0)
+            {
+                candidates = candidates.Where(n => !blockedIds.Contains(n.Id)).ToList();
+            }
+
             candidates = await ExcludeUnavailableAsync(candidates, window.Value, cancellationToken);
         }
 
@@ -62,22 +95,10 @@ public class NurseSearchService(
     /// <summary>
     /// Works out the requested [start, end) window in UTC. Returns null when the caller did not ask for a slot.
     /// </summary>
-    private async Task<(DateTime StartUtc, DateTime EndUtc)?> ResolveTimeWindowAsync(
+    private static (DateTime StartUtc, DateTime EndUtc)? ResolveTimeWindow(
         NurseSearchRequest request,
-        CancellationToken cancellationToken)
+        Service? service)
     {
-        Service? service = null;
-        if (request.ServiceId.HasValue)
-        {
-            service = await services.GetByIdAsync(request.ServiceId.Value, cancellationToken)
-                      ?? throw new NotFoundException("Service not found.");
-
-            if (!service.IsActive)
-            {
-                throw new BadRequestException("Service is not available.");
-            }
-        }
-
         if (request.StartTime is null)
         {
             if (request.EndTime is not null)
@@ -190,6 +211,8 @@ public class NurseSearchService(
                 ServiceRadiusKm = nurse.ServiceRadiusKm,
                 AverageRating = nurse.AverageRating,
                 TotalReviews = nurse.TotalReviews,
+                PractitionerType = nurse.PractitionerType,
+                PractitionerTypeName = ((NursePractitionerType)nurse.PractitionerType).ToString(),
                 DistanceKm = distanceKm is null ? null : Math.Round(distanceKm.Value, 2)
             });
         }

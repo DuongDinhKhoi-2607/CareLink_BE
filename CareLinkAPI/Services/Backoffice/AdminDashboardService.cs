@@ -1,17 +1,18 @@
 using CareLinkAPI.Common.Enums;
 using CareLinkAPI.Common.Exceptions;
 using CareLinkAPI.Common.Models;
+using CareLinkAPI.Common.Options;
 using CareLinkAPI.Contracts.Auth;
 using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Repositories;
+using Microsoft.Extensions.Options;
 
 namespace CareLinkAPI.Services.Backoffice;
 
 public class AdminDashboardService : IAdminDashboardService
 {
-    private const decimal PlatformFeePerBooking = 50000m; // 50,000 VND / booking (Fixed fee rule)
-
+    private readonly decimal _platformFeePerBooking;
     private readonly IServiceRepository _serviceRepository;
     private readonly IReviewRepository _reviewRepository;
     private readonly IDisputeRepository _disputeRepository;
@@ -23,13 +24,15 @@ public class AdminDashboardService : IAdminDashboardService
         IReviewRepository reviewRepository,
         IDisputeRepository disputeRepository,
         IBookingQueryService bookingQueryService,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IOptions<PayOsOptions> payOsOptions)
     {
         _serviceRepository = serviceRepository;
         _reviewRepository = reviewRepository;
         _disputeRepository = disputeRepository;
         _bookingQueryService = bookingQueryService;
         _currentUserService = currentUserService;
+        _platformFeePerBooking = payOsOptions.Value.PlatformFeePerBooking;
     }
 
     public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken ct = default)
@@ -45,8 +48,8 @@ public class AdminDashboardService : IAdminDashboardService
         var totalDisputesCount = await _disputeRepository.CountTotalAsync(ct);
         var platformRating = await _reviewRepository.CalculatePlatformAverageRatingAsync(ct);
 
-        // Platform fee rule: 50,000 VND per completed booking
-        var platformFee = bookingMetrics.CompletedBookings * PlatformFeePerBooking;
+        // Platform fee calculated based on configured fee in PayOsOptions (default 60,000 VND / completed booking)
+        var platformFee = bookingMetrics.CompletedBookings * _platformFeePerBooking;
 
         return new DashboardSummaryDto
         {
@@ -73,7 +76,7 @@ public class AdminDashboardService : IAdminDashboardService
         }
 
         var bookingMetrics = await _bookingQueryService.GetBookingMetricsAsync(ct);
-        var platformFee = bookingMetrics.CompletedBookings * PlatformFeePerBooking;
+        var platformFee = bookingMetrics.CompletedBookings * _platformFeePerBooking;
 
         return new RevenueMetricDto
         {

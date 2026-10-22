@@ -57,3 +57,11 @@ public class BookingQueryRequest
     [Range(1, 50)]
     public int PageSize { get; set; } = 10;
 }
+
+/// <summary>Luồng 5: Check-in coordinates when starting the booking.</summary>
+public class StartBookingRequest
+{
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
+}
+

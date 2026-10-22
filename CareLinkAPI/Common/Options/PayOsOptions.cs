@@ -18,5 +18,5 @@ public class PayOsOptions
     public string CancelUrl { get; set; } = string.Empty;
 
     /// <summary>Pay-03: flat platform fee charged per booking (VND).</summary>
-    public decimal PlatformFeePerBooking { get; set; } = 50_000m;
+    public decimal PlatformFeePerBooking { get; set; } = 60_000m;
 }

@@ -43,6 +43,10 @@ public partial class Nurse
 
     public int Status { get; set; }
 
+    public int PractitionerType { get; set; } = 1; // 1=GraduateNurse, 2=MedicalStudent
+
+    public bool IsAcceptingBookings { get; set; } = true;
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }
@@ -50,6 +54,8 @@ public partial class Nurse
     public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 
     public virtual ICollection<NurseAvailability> NurseAvailabilities { get; set; } = new List<NurseAvailability>();
+
+    public virtual ICollection<NurseUnavailability> NurseUnavailabilities { get; set; } = new List<NurseUnavailability>();
 
     public virtual ICollection<NurseDocument> NurseDocuments { get; set; } = new List<NurseDocument>();
 

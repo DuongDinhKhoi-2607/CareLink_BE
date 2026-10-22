@@ -9,6 +9,7 @@ namespace CareLinkAPI.Services;
 public class NurseProfileService(
     INurseRepository nurseRepository,
     INurseAvailabilityRepository availabilityRepository,
+    INurseUnavailabilityRepository unavailabilityRepo,
     IUserRepository userRepository,
     IUnitOfWork unitOfWork) : INurseProfileService
 {
@@ -63,6 +64,21 @@ public class NurseProfileService(
         return MapToResponse(nurse);
     }
 
+    public async Task<NurseProfileResponse> SetAcceptingBookingsAsync(
+        Guid userId,
+        bool isAcceptingBookings,
+        CancellationToken cancellationToken = default)
+    {
+        var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
+        nurse.IsAcceptingBookings = isAcceptingBookings;
+        nurse.UpdatedAt = DateTime.UtcNow;
+
+        nurseRepository.Update(nurse);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return MapToResponse(nurse);
+    }
+
     public async Task<List<NurseAvailabilityResponse>> GetNurseAvailabilityAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
@@ -77,6 +93,9 @@ public class NurseProfileService(
     {
         if (request.StartTime >= request.EndTime)
             throw new BadRequestException("Giờ bắt đầu phải trước giờ kết thúc.");
+
+        if ((request.EndTime.ToTimeSpan() - request.StartTime.ToTimeSpan()).TotalMinutes < 60)
+            throw new BadRequestException("Mỗi ca rảnh phải kéo dài tối thiểu 60 phút.");
 
         var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
         var existingSlots = await availabilityRepository.GetByNurseIdAsync(nurse.Id, cancellationToken);
@@ -118,6 +137,9 @@ public class NurseProfileService(
         {
             if (s.StartTime >= s.EndTime)
                 throw new BadRequestException($"Khung giờ không hợp lệ: {s.StartTime} - {s.EndTime}. Giờ bắt đầu phải trước giờ kết thúc.");
+
+            if ((s.EndTime.ToTimeSpan() - s.StartTime.ToTimeSpan()).TotalMinutes < 60)
+                throw new BadRequestException($"Khung giờ {s.StartTime} - {s.EndTime} phải kéo dài tối thiểu 60 phút.");
         }
 
         // Validate internal overlap
@@ -175,6 +197,58 @@ public class NurseProfileService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<List<NurseUnavailabilityResponse>> GetNurseUnavailabilitiesAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
+        var items = await unavailabilityRepo.GetByNurseIdAsync(nurse.Id, cancellationToken);
+        return items.Select(MapToUnavailabilityResponse).ToList();
+    }
+
+    public async Task<NurseUnavailabilityResponse> AddNurseUnavailabilityAsync(
+        Guid userId,
+        CreateNurseUnavailabilityRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (request.Date < today)
+            throw new BadRequestException("Không thể đăng ký lịch bận cho một ngày trong quá khứ.");
+
+        var exists = await unavailabilityRepo.IsDateBlockedAsync(nurse.Id, request.Date, cancellationToken);
+        if (exists)
+            throw new ConflictException("Ngày này đã được đăng ký là ngày bận/nghỉ.");
+
+        var item = new NurseUnavailability
+        {
+            Id = Guid.NewGuid(),
+            NurseId = nurse.Id,
+            Date = request.Date,
+            Reason = request.Reason?.Trim(),
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await unavailabilityRepo.AddAsync(item, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return MapToUnavailabilityResponse(item);
+    }
+
+    public async Task DeleteNurseUnavailabilityAsync(
+        Guid userId,
+        Guid unavailabilityId,
+        CancellationToken cancellationToken = default)
+    {
+        var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
+        var item = await unavailabilityRepo.GetByIdAsync(unavailabilityId, cancellationToken)
+            ?? throw new NotFoundException("NurseUnavailability", unavailabilityId);
+
+        if (item.NurseId != nurse.Id)
+            throw new ForbiddenException("Không có quyền xoá ngày bận này.");
+
+        unavailabilityRepo.Delete(item);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     private async Task<Nurse> GetOrCreateNurseAsync(Guid userId, CancellationToken cancellationToken)
     {
         var nurse = await nurseRepository.GetByUserIdForUpdateAsync(userId, cancellationToken);
@@ -189,6 +263,8 @@ public class NurseProfileService(
             UserId = user.Id,
             FullName = user.Email.Split('@')[0],
             Status = (int)NurseStatus.PendingVerification,
+            PractitionerType = (int)NursePractitionerType.GraduateNurse,
+            IsAcceptingBookings = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -219,6 +295,9 @@ public class NurseProfileService(
         WorkDistrict = n.WorkDistrict,
         AverageRating = n.AverageRating,
         TotalReviews = n.TotalReviews,
+        PractitionerType = n.PractitionerType,
+        PractitionerTypeName = ((NursePractitionerType)n.PractitionerType).ToString(),
+        IsAcceptingBookings = n.IsAcceptingBookings,
         Status = (NurseStatus)n.Status,
         StatusName = ((NurseStatus)n.Status).ToString(),
         CreatedAt = n.CreatedAt,
@@ -244,5 +323,14 @@ public class NurseProfileService(
         StartTime = a.StartTime,
         EndTime = a.EndTime,
         IsActive = a.IsActive
+    };
+
+    private static NurseUnavailabilityResponse MapToUnavailabilityResponse(NurseUnavailability u) => new()
+    {
+        Id = u.Id,
+        NurseId = u.NurseId,
+        Date = u.Date,
+        Reason = u.Reason,
+        CreatedAt = u.CreatedAt
     };
 }

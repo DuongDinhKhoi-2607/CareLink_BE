@@ -37,6 +37,12 @@ public partial class Booking
 
     public DateTime? StartedAt { get; set; }
 
+    public decimal? CheckInLatitude { get; set; }
+
+    public decimal? CheckInLongitude { get; set; }
+
+    public string? CheckInNote { get; set; }
+
     public DateTime? CompletedAt { get; set; }
 
     public DateTime? CanceledAt { get; set; }

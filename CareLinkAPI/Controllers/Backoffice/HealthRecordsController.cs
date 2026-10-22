@@ -1,9 +1,11 @@
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Services.Backoffice;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CareLinkAPI.Controllers.Backoffice;
 
+[Authorize]
 [ApiController]
 public class HealthRecordsController : ControllerBase
 {
