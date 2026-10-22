@@ -39,7 +39,7 @@ public class BookingRepository(CareLinkDbContext db) : IBookingRepository
 
         if (filter.HideUnpaid)
         {
-            query = query.Where(b => b.Status != (int)BookingStatus.PendingPayment);
+            query = query.Where(b => b.Status != (int)BookingStatus.PendingPayment || (b.Payment != null && b.Payment.Status == (int)PaymentStatus.Paid));
         }
 
         if (filter.Status.HasValue)
