@@ -47,6 +47,14 @@ public partial class Nurse
 
     public bool IsAcceptingBookings { get; set; } = true;
 
+    public string? StudentEmail { get; set; }
+
+    public bool IsStudentEmailVerified { get; set; } = false;
+
+    public string? StudentEmailOtpHash { get; set; }
+
+    public DateTime? StudentEmailOtpExpiry { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }

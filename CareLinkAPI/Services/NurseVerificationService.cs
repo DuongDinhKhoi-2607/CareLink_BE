@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using CareLinkAPI.Common.Enums;
 using CareLinkAPI.Common.Exceptions;
@@ -13,6 +14,7 @@ public class NurseVerificationService(
     INurseDocumentRepository documentRepository,
     IUserRepository userRepository,
     INotificationRepository notificationRepository,
+    IEmailService emailService,
     IUnitOfWork unitOfWork) : INurseVerificationService
 {
     /// <summary>CCCD Việt Nam gồm đúng 12 chữ số; số thứ 4 (giới tính + thế kỷ) từ 0–9.</summary>
@@ -52,6 +54,12 @@ public class NurseVerificationService(
         }
         else
         {
+            // Medical student must have verified student email first
+            if (!nurse.IsStudentEmailVerified)
+            {
+                throw new BadRequestException("Sinh viên Y khoa bắt buộc phải xác thực email trường (.edu.vn hoặc .edu) bằng mã OTP trước khi nộp hồ sơ.");
+            }
+
             // Medical student can leave license optional
             nurse.LicenseNumber = request.LicenseNumber?.Trim();
             nurse.LicenseIssuedDate = request.LicenseIssuedDate;
@@ -65,7 +73,7 @@ public class NurseVerificationService(
 
         // Check required documents
         var docs = await documentRepository.GetByNurseIdAsync(nurse.Id, cancellationToken);
-        var missing = GetMissingDocuments(docs, request.PractitionerType);
+        var missing = GetMissingDocuments(docs, request.PractitionerType, nurse.IsStudentEmailVerified);
 
         if (missing.Count == 0)
         {
@@ -121,6 +129,70 @@ public class NurseVerificationService(
         return await BuildStatusResponseAsync(nurse, cancellationToken, forceResubmitted: true);
     }
 
+    // ─── NURSE: STUDENT EMAIL VERIFICATION (OTP) ──────────────────────────────
+    public async Task SendStudentEmailOtpAsync(
+        Guid userId,
+        SendStudentEmailOtpRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
+        var email = (request.StudentEmail ?? string.Empty).Trim().ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(email))
+            throw new BadRequestException("Địa chỉ email sinh viên là bắt buộc.");
+
+        if (!email.EndsWith(".edu.vn", StringComparison.OrdinalIgnoreCase) &&
+            !email.EndsWith(".edu", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException("Email sinh viên không hợp lệ. Phải là email có tên miền do trường cấp (kết thúc bằng .edu.vn hoặc .edu).");
+        }
+
+        var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+        nurse.StudentEmail = email;
+        nurse.StudentEmailOtpHash = BCrypt.Net.BCrypt.HashPassword(otp);
+        nurse.StudentEmailOtpExpiry = DateTime.UtcNow.AddMinutes(15);
+        nurse.IsStudentEmailVerified = false;
+        nurse.UpdatedAt = DateTime.UtcNow;
+
+        nurseRepository.Update(nurse);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await emailService.SendStudentVerificationOtpAsync(email, otp, cancellationToken);
+    }
+
+    public async Task<NurseVerificationStatusResponse> VerifyStudentEmailOtpAsync(
+        Guid userId,
+        VerifyStudentEmailOtpRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
+
+        if (string.IsNullOrEmpty(nurse.StudentEmail))
+            throw new BadRequestException("Chưa đăng ký email sinh viên. Vui lòng gửi yêu cầu nhận mã OTP trước.");
+
+        if (string.IsNullOrEmpty(nurse.StudentEmailOtpHash) ||
+            !nurse.StudentEmailOtpExpiry.HasValue ||
+            nurse.StudentEmailOtpExpiry.Value < DateTime.UtcNow)
+        {
+            throw new BadRequestException("Mã OTP đã hết hạn hoặc không tồn tại (thời hạn hiệu lực 15 phút). Vui lòng yêu cầu gửi lại mã mới.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.Otp.Trim(), nurse.StudentEmailOtpHash))
+        {
+            throw new BadRequestException("Mã OTP không chính xác. Vui lòng kiểm tra lại hộp thư.");
+        }
+
+        nurse.IsStudentEmailVerified = true;
+        nurse.StudentEmailOtpHash = null;
+        nurse.StudentEmailOtpExpiry = null;
+        nurse.UpdatedAt = DateTime.UtcNow;
+
+        nurseRepository.Update(nurse);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await BuildStatusResponseAsync(nurse, cancellationToken);
+    }
+
     // ─── NURSE: GET DOCUMENTS ─────────────────────────────────────────────────
     public async Task<List<NurseDocumentResponse>> GetNurseDocumentsAsync(
         Guid userId,
@@ -167,6 +239,8 @@ public class NurseVerificationService(
                 LicenseExpiryDate = n.LicenseExpiryDate,
                 PractitionerType = n.PractitionerType,
                 PractitionerTypeName = ((NursePractitionerType)n.PractitionerType).ToString(),
+                StudentEmail = n.StudentEmail,
+                IsStudentEmailVerified = n.IsStudentEmailVerified,
                 Status = n.Status,
                 StatusName = ((NurseStatus)n.Status).ToString(),
                 VerificationStatus = (int)vStatus,
@@ -229,6 +303,8 @@ public class NurseVerificationService(
             LicenseExpiryDate = nurse.LicenseExpiryDate,
             PractitionerType = nurse.PractitionerType,
             PractitionerTypeName = ((NursePractitionerType)nurse.PractitionerType).ToString(),
+            StudentEmail = nurse.StudentEmail,
+            IsStudentEmailVerified = nurse.IsStudentEmailVerified,
             Status = nurse.Status,
             StatusName = ((NurseStatus)nurse.Status).ToString(),
             VerificationStatus = (int)vStatus,
@@ -268,6 +344,9 @@ public class NurseVerificationService(
 
             if (!request.Checklist.CccdValid || !request.Checklist.DegreeOrStudentCardValid || !request.Checklist.FaceMatch)
                 throw new BadRequestException("Checklist chưa đầy đủ (CCCD, Bằng/Thẻ SV, và Khớp khuôn mặt phải hợp lệ).");
+
+            if (nurse.PractitionerType == (int)NursePractitionerType.MedicalStudent && (!request.Checklist.StudentEmailVerified || !nurse.IsStudentEmailVerified))
+                throw new BadRequestException("Sinh viên Y khoa bắt buộc phải xác thực email trường (.edu.vn / .edu).");
 
             nurse.Status = (int)NurseStatus.Active;
             nurse.UpdatedAt = now;
@@ -415,7 +494,7 @@ public class NurseVerificationService(
         }
     }
 
-    private static List<string> GetMissingDocuments(List<NurseDocument> docs, int practitionerType)
+    private static List<string> GetMissingDocuments(List<NurseDocument> docs, int practitionerType, bool isStudentEmailVerified)
     {
         var missing = new List<string>();
         var docTypes = docs.Select(d => d.DocumentType).ToHashSet();
@@ -438,6 +517,9 @@ public class NurseVerificationService(
         {
             if (!docTypes.Contains((int)NurseDocumentType.StudentCard))
                 missing.Add("Thẻ sinh viên / Giấy xác nhận trường (STUDENT_CARD)");
+
+            if (!isStudentEmailVerified)
+                missing.Add("Xác thực email trường (.edu.vn hoặc .edu) bằng mã OTP");
         }
 
         return missing;
@@ -478,7 +560,7 @@ public class NurseVerificationService(
             : ComputeVerificationStatus(nurse, docs);
 
         var latestRejectedDoc = docs.FirstOrDefault(d => !string.IsNullOrEmpty(d.AdminNote));
-        var missing = GetMissingDocuments(docs, nurse.PractitionerType);
+        var missing = GetMissingDocuments(docs, nurse.PractitionerType, nurse.IsStudentEmailVerified);
 
         return new NurseVerificationStatusResponse
         {
@@ -490,6 +572,8 @@ public class NurseVerificationService(
             CitizenId = nurse.CitizenId,
             PractitionerType = nurse.PractitionerType,
             PractitionerTypeName = ((NursePractitionerType)nurse.PractitionerType).ToString(),
+            StudentEmail = nurse.StudentEmail,
+            IsStudentEmailVerified = nurse.IsStudentEmailVerified,
             LicenseNumber = nurse.LicenseNumber,
             LicenseExpiryDate = nurse.LicenseExpiryDate,
             Documents = docs.Select(MapDocumentResponse).ToList(),
@@ -513,6 +597,8 @@ public class NurseVerificationService(
             UserId = user.Id,
             FullName = user.Email.Split('@')[0],
             Status = (int)NurseStatus.PendingVerification,
+            PractitionerType = (int)NursePractitionerType.GraduateNurse,
+            IsAcceptingBookings = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };

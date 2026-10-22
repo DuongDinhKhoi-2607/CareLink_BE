@@ -16,6 +16,16 @@ public interface INurseVerificationService
         ReSubmitNurseVerificationRequest request,
         CancellationToken cancellationToken = default);
 
+    Task SendStudentEmailOtpAsync(
+        Guid userId,
+        SendStudentEmailOtpRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<NurseVerificationStatusResponse> VerifyStudentEmailOtpAsync(
+        Guid userId,
+        VerifyStudentEmailOtpRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<List<NurseDocumentResponse>> GetNurseDocumentsAsync(
         Guid userId,
         CancellationToken cancellationToken = default);

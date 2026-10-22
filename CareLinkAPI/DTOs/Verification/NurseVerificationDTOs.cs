@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using CareLinkAPI.Common.Enums;
 
 namespace CareLinkAPI.DTOs.Verification;
@@ -25,6 +26,20 @@ public class UploadNurseDocumentRequest
     public int DocumentType { get; set; }
 
     public string FileUrl { get; set; } = null!;
+}
+
+public class SendStudentEmailOtpRequest
+{
+    [Required]
+    [EmailAddress]
+    public string StudentEmail { get; set; } = null!;
+}
+
+public class VerifyStudentEmailOtpRequest
+{
+    [Required]
+    [StringLength(6, MinimumLength = 6)]
+    public string Otp { get; set; } = null!;
 }
 
 public class SubmitNurseVerificationRequest
@@ -68,6 +83,8 @@ public class NurseVerificationStatusResponse
     public string? CitizenId { get; set; }
     public int PractitionerType { get; set; } = 1;
     public string PractitionerTypeName { get; set; } = "GraduateNurse";
+    public string? StudentEmail { get; set; }
+    public bool IsStudentEmailVerified { get; set; }
     public string? LicenseNumber { get; set; }
     public DateOnly? LicenseExpiryDate { get; set; }
     public List<NurseDocumentResponse> Documents { get; set; } = new();

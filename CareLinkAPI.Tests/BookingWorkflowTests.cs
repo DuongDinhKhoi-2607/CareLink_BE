@@ -82,4 +82,23 @@ public class BookingWorkflowTests
 
         Assert.True(distanceKm > 0.5, $"Distance {distanceMeters}m should be > 500m");
     }
+
+    [Theory]
+    [InlineData("student@ump.edu.vn", true)]
+    [InlineData("bacsy.tuonglai@pnt.edu.vn", true)]
+    [InlineData("khoi@hmu.edu.vn", true)]
+    [InlineData("nurse@harvard.edu", true)]
+    [InlineData("fake@gmail.com", false)]
+    [InlineData("test@yahoo.com", false)]
+    [InlineData("scam@edu.com", false)]
+    [InlineData("", false)]
+    public void StudentEmailDomain_OnlyEduDomainsAllowed(string email, bool expectedValid)
+    {
+        var normalized = (email ?? string.Empty).Trim().ToLowerInvariant();
+        var isValid = !string.IsNullOrWhiteSpace(normalized) &&
+                      (normalized.EndsWith(".edu.vn", StringComparison.OrdinalIgnoreCase) ||
+                       normalized.EndsWith(".edu", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(expectedValid, isValid);
+    }
 }

@@ -203,4 +203,32 @@ public class NurseProfileController(
         var result = await nurseVerificationService.GetVerificationStatusAsync(this.GetCurrentUserId(), cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Luồng 1: Gửi mã OTP 6 số về Email sinh viên do trường cấp (kết thúc bằng .edu.vn hoặc .edu) để xác thực danh tính sinh viên y khoa.
+    /// </summary>
+    [HttpPost("student-email/send-otp")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SendStudentEmailOtp(
+        [FromBody] SendStudentEmailOtpRequest request,
+        CancellationToken cancellationToken)
+    {
+        await nurseVerificationService.SendStudentEmailOtpAsync(this.GetCurrentUserId(), request, cancellationToken);
+        return Ok(new { message = "Mã OTP xác thực đã được gửi đến email trường của bạn. Vui lòng kiểm tra hộp thư." });
+    }
+
+    /// <summary>
+    /// Luồng 1: Xác nhận mã OTP để hoàn tất xác thực email sinh viên y khoa.
+    /// </summary>
+    [HttpPost("student-email/verify-otp")]
+    [ProducesResponseType(typeof(NurseVerificationStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<NurseVerificationStatusResponse>> VerifyStudentEmailOtp(
+        [FromBody] VerifyStudentEmailOtpRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await nurseVerificationService.VerifyStudentEmailOtpAsync(this.GetCurrentUserId(), request, cancellationToken);
+        return Ok(result);
+    }
 }

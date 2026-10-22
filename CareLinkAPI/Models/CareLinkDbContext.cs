@@ -439,6 +439,17 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.IsAcceptingBookings)
                 .HasDefaultValue(true)
                 .HasColumnName("is_accepting_bookings");
+            entity.Property(e => e.StudentEmail)
+                .HasColumnType("character varying")
+                .HasColumnName("student_email");
+            entity.Property(e => e.IsStudentEmailVerified)
+                .HasDefaultValue(false)
+                .HasColumnName("is_student_email_verified");
+            entity.Property(e => e.StudentEmailOtpHash)
+                .HasColumnType("character varying")
+                .HasColumnName("student_email_otp_hash");
+            entity.Property(e => e.StudentEmailOtpExpiry)
+                .HasColumnName("student_email_otp_expiry");
             entity.Property(e => e.TotalReviews).HasColumnName("total_reviews");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")

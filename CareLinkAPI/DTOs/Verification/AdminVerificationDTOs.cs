@@ -16,6 +16,9 @@ public class AdminVerificationChecklist
     /// <summary>Ảnh selfie khuôn mặt khớp với ảnh chân dung trên CCCD</summary>
     public bool FaceMatch { get; set; }
 
+    /// <summary>Sinh viên Y khoa đã xác thực thành công email trường (.edu.vn / .edu)</summary>
+    public bool StudentEmailVerified { get; set; }
+
     /// <summary>Admin đã tra cứu CCHN/bằng trên cổng Sở Y tế hoặc website trường (chỉ để ghi nhận, không bắt buộc)</summary>
     public bool LicenseLookedUp { get; set; }
 }
@@ -45,6 +48,8 @@ public class AdminNurseVerificationItemResponse
     public DateOnly? LicenseExpiryDate { get; set; }
     public int PractitionerType { get; set; } = 1;
     public string PractitionerTypeName { get; set; } = "GraduateNurse";
+    public string? StudentEmail { get; set; }
+    public bool IsStudentEmailVerified { get; set; }
     public int Status { get; set; }
     public string StatusName { get; set; } = null!;
     public int VerificationStatus { get; set; }
@@ -74,6 +79,8 @@ public class AdminNurseVerificationDetailResponse
     public DateOnly? LicenseExpiryDate { get; set; }
     public int PractitionerType { get; set; } = 1;
     public string PractitionerTypeName { get; set; } = "GraduateNurse";
+    public string? StudentEmail { get; set; }
+    public bool IsStudentEmailVerified { get; set; }
     public int Status { get; set; }
     public string StatusName { get; set; } = null!;
     public int VerificationStatus { get; set; }
