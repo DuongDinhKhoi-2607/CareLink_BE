@@ -432,6 +432,9 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.ServiceRadiusKm)
                 .HasDefaultValue(10)
                 .HasColumnName("service_radius_km");
+            entity.Property(e => e.Status)
+                .HasDefaultValue(0)
+                .HasColumnName("status");
             entity.Property(e => e.PractitionerType)
                 .HasDefaultValue(1)
                 .HasColumnName("practitioner_type");
