@@ -9,6 +9,8 @@ public interface IPaymentService
     Task<CreatePaymentLinkResponse> CreatePaymentLinkAsync(
         Guid userId,
         Guid bookingId,
+        string? clientReturnUrl = null,
+        string? clientCancelUrl = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Payment of a booking (customer owner or admin).</summary>

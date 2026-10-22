@@ -39,6 +39,8 @@ public class PaymentService(
     public async Task<DTOs.Payments.CreatePaymentLinkResponse> CreatePaymentLinkAsync(
         Guid userId,
         Guid bookingId,
+        string? clientReturnUrl = null,
+        string? clientCancelUrl = null,
         CancellationToken cancellationToken = default)
     {
         var customer = await RequireCustomerAsync(userId, cancellationToken);
@@ -65,18 +67,46 @@ public class PaymentService(
 
         var payment = booking.Payment;
 
-        // Reuse a still-valid link instead of creating duplicates at the gateway.
+        // Resolve return and cancel URLs: prioritize clientReturnUrl / clientCancelUrl if provided
+        var baseReturnUrl = !string.IsNullOrWhiteSpace(clientReturnUrl) ? clientReturnUrl.Trim() : _payOs.ReturnUrl;
+        var baseCancelUrl = !string.IsNullOrWhiteSpace(clientCancelUrl) ? clientCancelUrl.Trim() : _payOs.CancelUrl;
+
+        var resolvedReturnUrl = baseReturnUrl.Contains('?') ? $"{baseReturnUrl}&bookingId={booking.Id}" : $"{baseReturnUrl}?bookingId={booking.Id}";
+        var resolvedCancelUrl = baseCancelUrl.Contains('?') ? $"{baseCancelUrl}&bookingId={booking.Id}" : $"{baseCancelUrl}?bookingId={booking.Id}";
+
+        // Reuse a still-valid link instead of creating duplicates at the gateway,
+        // EXCEPT if the old link was bound to carelink.vn but the client explicitly requested localhost or another origin.
         if (payment is { Status: (int)PaymentStatus.Pending, CheckoutUrl: not null }
             && long.TryParse(payment.PaymentCode, out var existingCode))
         {
-            return new DTOs.Payments.CreatePaymentLinkResponse
+            bool hostMismatch = false;
+            if (!string.IsNullOrWhiteSpace(clientReturnUrl) && !string.IsNullOrWhiteSpace(payment.CheckoutUrl))
             {
-                PaymentId = payment.Id,
-                BookingId = booking.Id,
-                OrderCode = existingCode,
-                Amount = payment.Amount,
-                CheckoutUrl = payment.CheckoutUrl
-            };
+                if (payment.CheckoutUrl.Contains("carelink.vn") && !clientReturnUrl.Contains("carelink.vn"))
+                {
+                    hostMismatch = true;
+                }
+                else if (clientReturnUrl.Contains("localhost") && !payment.CheckoutUrl.Contains("localhost"))
+                {
+                    hostMismatch = true;
+                }
+                else if (clientReturnUrl.Contains("vercel.app") && !payment.CheckoutUrl.Contains("vercel.app"))
+                {
+                    hostMismatch = true;
+                }
+            }
+
+            if (!hostMismatch)
+            {
+                return new DTOs.Payments.CreatePaymentLinkResponse
+                {
+                    PaymentId = payment.Id,
+                    BookingId = booking.Id,
+                    OrderCode = existingCode,
+                    Amount = payment.Amount,
+                    CheckoutUrl = payment.CheckoutUrl
+                };
+            }
         }
 
         if (payment is { Status: (int)PaymentStatus.Paid or (int)PaymentStatus.Refunded })
@@ -97,8 +127,8 @@ public class PaymentService(
                 Amount = (long)decimal.Round(amount, 0, MidpointRounding.AwayFromZero),
                 // PayOS limits the description to 25 characters.
                 Description = $"CL {booking.Id.ToString("N")[..8].ToUpperInvariant()}",
-                ReturnUrl = _payOs.ReturnUrl.Contains('?') ? $"{_payOs.ReturnUrl}&bookingId={booking.Id}" : $"{_payOs.ReturnUrl}?bookingId={booking.Id}",
-                CancelUrl = _payOs.CancelUrl.Contains('?') ? $"{_payOs.CancelUrl}&bookingId={booking.Id}" : $"{_payOs.CancelUrl}?bookingId={booking.Id}",
+                ReturnUrl = resolvedReturnUrl,
+                CancelUrl = resolvedCancelUrl,
                 BuyerName = customer.FullName,
                 BuyerPhone = customer.Phone,
                 ExpiredAt = new DateTimeOffset(holdUntil, TimeSpan.Zero).ToUnixTimeSeconds(),
@@ -116,9 +146,9 @@ public class PaymentService(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "PayOS create payment link failed for booking {BookingId}. Falling back to sandbox payment link.", booking.Id);
-            var returnUrl = _payOs.ReturnUrl.Contains('?')
-                ? $"{_payOs.ReturnUrl}&bookingId={booking.Id}&orderCode={orderCode}&status=PAID&code=00"
-                : $"{_payOs.ReturnUrl}?bookingId={booking.Id}&orderCode={orderCode}&status=PAID&code=00";
+            var returnUrl = resolvedReturnUrl.Contains('?')
+                ? $"{resolvedReturnUrl}&orderCode={orderCode}&status=PAID&code=00"
+                : $"{resolvedReturnUrl}?orderCode={orderCode}&status=PAID&code=00";
 
             link = new GatewayLinkResponse
             {
@@ -179,9 +209,30 @@ public class PaymentService(
             }
         }
 
-        if (payment.Status == (int)PaymentStatus.Pending && payment.GatewayTransactionId != null && payment.GatewayTransactionId.StartsWith("sandbox_"))
+        if (payment.Status == (int)PaymentStatus.Pending)
         {
-            await FulfillPaidPaymentAsync(payment, payment.GatewayTransactionId, "SANDBOX_MOCK_PAYLOAD", cancellationToken);
+            if (long.TryParse(payment.PaymentCode, out var orderCode))
+            {
+                try
+                {
+                    using var client = CreateClient();
+                    var payOsInfo = await client.PaymentRequests.GetAsync(orderCode);
+                    if (payOsInfo != null && payOsInfo.Status.ToString().Equals("PAID", StringComparison.OrdinalIgnoreCase))
+                    {
+                        logger.LogInformation("Payment for booking {BookingId} (order {OrderCode}) confirmed PAID directly via PayOS API.", bookingId, orderCode);
+                        await FulfillPaidPaymentAsync(payment, payOsInfo.Id, "PAYOS_DIRECT_SYNC", cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogDebug(ex, "Could not fetch PayOS status for order {OrderCode}", orderCode);
+                }
+            }
+
+            if (payment.Status == (int)PaymentStatus.Pending && payment.GatewayTransactionId != null && payment.GatewayTransactionId.StartsWith("sandbox_"))
+            {
+                await FulfillPaidPaymentAsync(payment, payment.GatewayTransactionId, "SANDBOX_MOCK_PAYLOAD", cancellationToken);
+            }
         }
 
         return payment.ToResponse();
