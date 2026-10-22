@@ -1,12 +1,11 @@
 using CareLinkAPI.Common.Enums;
 using CareLinkAPI.Common.Exceptions;
 using CareLinkAPI.Common.Models;
+using CareLinkAPI.Common.Options;
 using CareLinkAPI.Contracts.Auth;
 using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Repositories;
-
-using CareLinkAPI.Common.Options;
 using Microsoft.Extensions.Options;
 
 namespace CareLinkAPI.Services.Backoffice;
@@ -49,7 +48,7 @@ public class AdminDashboardService : IAdminDashboardService
         var totalDisputesCount = await _disputeRepository.CountTotalAsync(ct);
         var platformRating = await _reviewRepository.CalculatePlatformAverageRatingAsync(ct);
 
-        // Platform fee rule: 50,000 VND per completed booking
+        // Platform fee calculated based on configured fee in PayOsOptions (default 60,000 VND / completed booking)
         var platformFee = bookingMetrics.CompletedBookings * _platformFeePerBooking;
 
         return new DashboardSummaryDto

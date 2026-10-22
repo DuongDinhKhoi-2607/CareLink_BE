@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace CareLinkAPI.Models;
@@ -24,6 +24,8 @@ public partial class CareRecipient
     public decimal? Latitude { get; set; }
 
     public decimal? Longitude { get; set; }
+
+    public bool IsDeleted { get; set; } = false;
 
     public DateTime CreatedAt { get; set; }
 

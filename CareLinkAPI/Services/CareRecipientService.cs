@@ -112,9 +112,10 @@ public class CareRecipientService(
 
         var hasActiveBookings = await recipientRepository.HasActiveBookingsAsync(recipientId, cancellationToken);
         if (hasActiveBookings)
-            throw new ConflictException("Cannot delete care recipient while active bookings are pending or in progress.");
+            throw new ConflictException("Không thể xoá hồ sơ người thân khi đang có ca chăm sóc chưa hoàn tất.");
 
-        recipientRepository.Delete(recipient);
+        recipient.IsDeleted = true;
+        recipientRepository.Update(recipient);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 

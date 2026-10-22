@@ -43,6 +43,8 @@ public class AdminNurseVerificationItemResponse
     public string? CitizenId { get; set; }
     public string? LicenseNumber { get; set; }
     public DateOnly? LicenseExpiryDate { get; set; }
+    public int PractitionerType { get; set; } = 1;
+    public string PractitionerTypeName { get; set; } = "GraduateNurse";
     public int Status { get; set; }
     public string StatusName { get; set; } = null!;
     public int VerificationStatus { get; set; }
@@ -70,6 +72,8 @@ public class AdminNurseVerificationDetailResponse
     public string? LicenseNumber { get; set; }
     public DateOnly? LicenseIssuedDate { get; set; }
     public DateOnly? LicenseExpiryDate { get; set; }
+    public int PractitionerType { get; set; } = 1;
+    public string PractitionerTypeName { get; set; } = "GraduateNurse";
     public int Status { get; set; }
     public string StatusName { get; set; } = null!;
     public int VerificationStatus { get; set; }

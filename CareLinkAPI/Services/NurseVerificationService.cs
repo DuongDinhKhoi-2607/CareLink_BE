@@ -39,6 +39,7 @@ public class NurseVerificationService(
             throw new ConflictException("Số CCCD này đã được đăng ký bởi một tài khoản điều dưỡng khác.");
 
         nurse.CitizenId = normalizedCccd;
+        nurse.PractitionerType = request.PractitionerType;
 
         if (request.PractitionerType == (int)NursePractitionerType.GraduateNurse)
         {
@@ -97,6 +98,9 @@ public class NurseVerificationService(
                 throw new ConflictException("Số CCCD này đã được sử dụng bởi một tài khoản điều dưỡng khác.");
             nurse.CitizenId = normalizedCccd;
         }
+
+        if (request.PractitionerType.HasValue)
+            nurse.PractitionerType = request.PractitionerType.Value;
 
         if (request.LicenseNumber != null)
             nurse.LicenseNumber = request.LicenseNumber.Trim();
@@ -161,6 +165,8 @@ public class NurseVerificationService(
                 CitizenId = n.CitizenId,
                 LicenseNumber = n.LicenseNumber,
                 LicenseExpiryDate = n.LicenseExpiryDate,
+                PractitionerType = n.PractitionerType,
+                PractitionerTypeName = ((NursePractitionerType)n.PractitionerType).ToString(),
                 Status = n.Status,
                 StatusName = ((NurseStatus)n.Status).ToString(),
                 VerificationStatus = (int)vStatus,
@@ -221,6 +227,8 @@ public class NurseVerificationService(
             LicenseNumber = nurse.LicenseNumber,
             LicenseIssuedDate = nurse.LicenseIssuedDate,
             LicenseExpiryDate = nurse.LicenseExpiryDate,
+            PractitionerType = nurse.PractitionerType,
+            PractitionerTypeName = ((NursePractitionerType)nurse.PractitionerType).ToString(),
             Status = nurse.Status,
             StatusName = ((NurseStatus)nurse.Status).ToString(),
             VerificationStatus = (int)vStatus,
@@ -242,6 +250,10 @@ public class NurseVerificationService(
         AdminReviewNurseVerificationRequest request,
         CancellationToken cancellationToken = default)
     {
+        var admin = await userRepository.GetByIdAsync(adminUserId, cancellationToken);
+        if (admin == null || admin.Role != (int)UserRole.Admin)
+            throw new ForbiddenException("Chỉ quản trị viên (Admin) mới có quyền xét duyệt hồ sơ điều dưỡng.");
+
         var nurse = await nurseRepository.GetWithDocumentsByIdAsync(nurseId, track: true, cancellationToken)
             ?? throw new NotFoundException("Nurse", nurseId);
 
@@ -466,7 +478,7 @@ public class NurseVerificationService(
             : ComputeVerificationStatus(nurse, docs);
 
         var latestRejectedDoc = docs.FirstOrDefault(d => !string.IsNullOrEmpty(d.AdminNote));
-        var missing = GetMissingDocuments(docs, string.IsNullOrEmpty(nurse.LicenseNumber) ? 2 : 1);
+        var missing = GetMissingDocuments(docs, nurse.PractitionerType);
 
         return new NurseVerificationStatusResponse
         {
@@ -476,6 +488,8 @@ public class NurseVerificationService(
             VerificationStatus = (int)vStatus,
             VerificationStatusName = vStatus.ToString(),
             CitizenId = nurse.CitizenId,
+            PractitionerType = nurse.PractitionerType,
+            PractitionerTypeName = ((NursePractitionerType)nurse.PractitionerType).ToString(),
             LicenseNumber = nurse.LicenseNumber,
             LicenseExpiryDate = nurse.LicenseExpiryDate,
             Documents = docs.Select(MapDocumentResponse).ToList(),

@@ -26,7 +26,7 @@ public static class BookingStateMachine
             [BookingStatus.InProgress] = [BookingStatus.Completed],
             [BookingStatus.Completed] = [BookingStatus.Disputed],
             [BookingStatus.Canceled] = [],
-            [BookingStatus.Disputed] = []
+            [BookingStatus.Disputed] = [BookingStatus.Completed]
         };
 
     public static bool CanTransition(BookingStatus from, BookingStatus to) =>

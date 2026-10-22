@@ -165,6 +165,13 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.ScheduledStart).HasColumnName("scheduled_start");
             entity.Property(e => e.ServiceId).HasColumnName("service_id");
             entity.Property(e => e.StartedAt).HasColumnName("started_at");
+            entity.Property(e => e.CheckInLatitude)
+                .HasPrecision(10, 7)
+                .HasColumnName("checkin_latitude");
+            entity.Property(e => e.CheckInLongitude)
+                .HasPrecision(10, 7)
+                .HasColumnName("checkin_longitude");
+            entity.Property(e => e.CheckInNote).HasColumnName("checkin_note");
             entity.Property(e => e.Status)
                 .HasDefaultValue(1)
                 .HasColumnName("status");
@@ -227,6 +234,9 @@ public partial class CareLinkDbContext : DbContext
                 .HasColumnName("longitude");
             entity.Property(e => e.MedicalHistory).HasColumnName("medical_history");
             entity.Property(e => e.SpecialNotes).HasColumnName("special_notes");
+            entity.Property(e => e.IsDeleted)
+                .HasDefaultValue(false)
+                .HasColumnName("is_deleted");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.CareRecipients)
                 .HasForeignKey(d => d.CustomerId)
@@ -422,7 +432,9 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.ServiceRadiusKm)
                 .HasDefaultValue(10)
                 .HasColumnName("service_radius_km");
-            entity.Property(e => e.Status).HasColumnName("status");
+            entity.Property(e => e.PractitionerType)
+                .HasDefaultValue(1)
+                .HasColumnName("practitioner_type");
             entity.Property(e => e.IsAcceptingBookings)
                 .HasDefaultValue(true)
                 .HasColumnName("is_accepting_bookings");
@@ -470,7 +482,7 @@ public partial class CareLinkDbContext : DbContext
 
             entity.ToTable("nurse_unavailabilities");
 
-            entity.HasIndex(e => new { e.NurseId, e.Date }, "uq_nurse_date").IsUnique();
+            entity.HasIndex(e => new { e.NurseId, e.Date }, "uq_nurse_unavailability_date").IsUnique();
             entity.HasIndex(e => e.NurseId, "idx_nurse_unavailabilities_nurse");
             entity.HasIndex(e => e.Date, "idx_nurse_unavailabilities_date");
 
@@ -481,6 +493,7 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.Date).HasColumnName("date");
             entity.Property(e => e.Reason)
                 .HasMaxLength(255)
+                .HasColumnType("character varying")
                 .HasColumnName("reason");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
@@ -488,7 +501,8 @@ public partial class CareLinkDbContext : DbContext
 
             entity.HasOne(d => d.Nurse).WithMany(p => p.NurseUnavailabilities)
                 .HasForeignKey(d => d.NurseId)
-                .HasConstraintName("fk_nurse_unavailabilities_nurse");
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_unavailability_nurse");
         });
 
         modelBuilder.Entity<NurseDocument>(entity =>

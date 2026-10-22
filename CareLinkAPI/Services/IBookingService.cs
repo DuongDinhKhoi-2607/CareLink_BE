@@ -20,7 +20,7 @@ public interface IBookingService
     Task<BookingResponse> RejectAsync(Guid userId, Guid bookingId, RejectBookingRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>Book-04: Accepted -> InProgress (nurse check-in).</summary>
-    Task<BookingResponse> StartAsync(Guid userId, Guid bookingId, CancellationToken cancellationToken = default);
+    Task<BookingResponse> StartAsync(Guid userId, Guid bookingId, StartBookingRequest? request = null, CancellationToken cancellationToken = default);
 
     /// <summary>Book-05: InProgress -> Completed (nurse, requires a submitted health record).</summary>
     Task<BookingResponse> FinishAsync(Guid userId, Guid bookingId, CancellationToken cancellationToken = default);

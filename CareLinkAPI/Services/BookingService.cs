@@ -253,7 +253,11 @@ public class BookingService(
                 cancellationToken);
         }, cancellationToken);
 
-    public Task<BookingResponse> StartAsync(Guid userId, Guid bookingId, CancellationToken cancellationToken = default) =>
+    public Task<BookingResponse> StartAsync(
+        Guid userId,
+        Guid bookingId,
+        StartBookingRequest? request = null,
+        CancellationToken cancellationToken = default) =>
         ExecuteTransitionAsync(userId, bookingId, async (actor, booking, now) =>
         {
             EnsureRole(actor, UserRole.Nurse, "Only the assigned nurse can start a booking.");
@@ -264,6 +268,32 @@ public class BookingService(
             {
                 throw new BusinessRuleException(
                     $"Check-in is only allowed from {_options.CheckInEarlyMinutes} minutes before the scheduled start.");
+            }
+
+            // GPS Check-in (Luồng 5: Soft-check GPS)
+            if (request?.Latitude.HasValue == true && request?.Longitude.HasValue == true)
+            {
+                booking.CheckInLatitude = request.Latitude.Value;
+                booking.CheckInLongitude = request.Longitude.Value;
+
+                if (booking.LatitudeSnapshot.HasValue && booking.LongitudeSnapshot.HasValue)
+                {
+                    var distanceKm = GeoUtils.HaversineKm(
+                        (double)request.Latitude.Value,
+                        (double)request.Longitude.Value,
+                        (double)booking.LatitudeSnapshot.Value,
+                        (double)booking.LongitudeSnapshot.Value);
+
+                    var distanceMeters = (int)Math.Round(distanceKm * 1000);
+                    if (distanceKm > 0.5) // > 500m
+                    {
+                        booking.CheckInNote = $"Cảnh báo vị trí: Check-in lệch {distanceMeters:N0}m so với địa chỉ khách hàng.";
+                    }
+                    else
+                    {
+                        booking.CheckInNote = $"Vị trí hợp lệ: Cách {distanceMeters:N0}m so với địa chỉ khách hàng.";
+                    }
+                }
             }
 
             booking.Status = (int)BookingStatus.InProgress;

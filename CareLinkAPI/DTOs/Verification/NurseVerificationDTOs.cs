@@ -66,6 +66,8 @@ public class NurseVerificationStatusResponse
     public int VerificationStatus { get; set; }
     public string VerificationStatusName { get; set; } = null!;
     public string? CitizenId { get; set; }
+    public int PractitionerType { get; set; } = 1;
+    public string PractitionerTypeName { get; set; } = "GraduateNurse";
     public string? LicenseNumber { get; set; }
     public DateOnly? LicenseExpiryDate { get; set; }
     public List<NurseDocumentResponse> Documents { get; set; } = new();

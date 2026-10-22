@@ -1,6 +1,7 @@
 using CareLinkAPI.Common.Enums;
 using CareLinkAPI.Common.Exceptions;
 using CareLinkAPI.Common.Models;
+using CareLinkAPI.Common.Rules;
 using CareLinkAPI.Contracts.Auth;
 using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.Contracts.Payment;
@@ -13,33 +14,45 @@ namespace CareLinkAPI.Services.Backoffice;
 public class DisputeService : IDisputeService
 {
     private readonly IDisputeRepository _disputeRepository;
+    private readonly IBookingRepository _bookingRepository;
     private readonly IBookingQueryService _bookingQueryService;
     private readonly IPaymentQueryService _paymentQueryService;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUnitOfWork _unitOfWork;
 
     public DisputeService(
         IDisputeRepository disputeRepository,
+        IBookingRepository bookingRepository,
         IBookingQueryService bookingQueryService,
         IPaymentQueryService paymentQueryService,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IUnitOfWork unitOfWork)
     {
         _disputeRepository = disputeRepository;
+        _bookingRepository = bookingRepository;
         _bookingQueryService = bookingQueryService;
         _paymentQueryService = paymentQueryService;
         _currentUserService = currentUserService;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<DisputeResponseDto> CreateDisputeAsync(Guid bookingId, CreateDisputeDto dto, CancellationToken ct = default)
     {
         var currentUserId = _currentUserService.GetRequiredUserId();
 
-        var booking = await _bookingQueryService.GetBookingContextAsync(bookingId, ct)
+        var booking = await _bookingRepository.GetByIdAsync(bookingId, asNoTracking: false, ct)
             ?? throw new NotFoundException("Booking", bookingId);
 
         // Security check: Customer can only dispute their own booking (CustomerUserId matches JWT user)
-        if (booking.CustomerUserId != currentUserId && !_currentUserService.IsAdmin)
+        if (booking.Customer.UserId != currentUserId && !_currentUserService.IsAdmin)
         {
             throw new ForbiddenException("Chỉ khách hàng sở hữu ca chăm sóc mới có quyền gửi khiếu nại.");
+        }
+
+        // State check: Booking must be Completed
+        if (booking.Status != (int)BookingStatus.Completed)
+        {
+            throw new BusinessRuleException("Chỉ có thể gửi khiếu nại đối với ca chăm sóc đã hoàn tất (Completed).");
         }
 
         // Active dispute limit: at most 1 Open/Processing dispute per booking
@@ -49,11 +62,15 @@ public class DisputeService : IDisputeService
             throw new ConflictException("Đang có một khiếu nại khác cho ca chăm sóc này đang được xử lý.");
         }
 
+        // Transition booking to Disputed
+        BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Disputed);
+        booking.Status = (int)BookingStatus.Disputed;
+
         var dispute = new Dispute
         {
             Id = Guid.NewGuid(),
             BookingId = bookingId,
-            CustomerId = booking.CustomerId, // customers.id! Matches disputes.customer_id FK to customers.id
+            CustomerId = booking.CustomerId,
             Reason = dto.Reason.Trim(),
             Description = dto.Description?.Trim(),
             EvidenceUrls = dto.EvidenceUrls ?? new List<string>(),
@@ -63,6 +80,7 @@ public class DisputeService : IDisputeService
         };
 
         var created = await _disputeRepository.AddAsync(dispute, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
         return MapToResponseDto(created);
     }
 
@@ -83,7 +101,7 @@ public class DisputeService : IDisputeService
             throw new BusinessRuleException("Khiếu nại này đã được đóng trước đó.");
         }
 
-        var booking = await _bookingQueryService.GetBookingContextAsync(dispute.BookingId, ct)
+        var booking = await _bookingRepository.GetByIdAsync(dispute.BookingId, asNoTracking: false, ct)
             ?? throw new NotFoundException("Booking", dispute.BookingId);
 
         if (dto.ResolutionType == 1) // 1=Refunded
@@ -118,7 +136,15 @@ public class DisputeService : IDisputeService
         dispute.ResolvedBy = currentUserId;
         dispute.ResolvedAt = DateTime.UtcNow;
 
+        // Transition booking status back from Disputed to Completed
+        if (booking.Status == (int)BookingStatus.Disputed)
+        {
+            BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Completed);
+            booking.Status = (int)BookingStatus.Completed;
+        }
+
         await _disputeRepository.UpdateAsync(dispute, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
         return MapToResponseDto(dispute);
     }
 
@@ -131,8 +157,8 @@ public class DisputeService : IDisputeService
 
         if (!_currentUserService.IsAdmin)
         {
-            var booking = await _bookingQueryService.GetBookingContextAsync(dispute.BookingId, ct);
-            if (booking != null && booking.CustomerUserId != currentUserId)
+            var booking = await _bookingRepository.GetByIdAsync(dispute.BookingId, asNoTracking: true, ct);
+            if (booking != null && booking.Customer.UserId != currentUserId)
             {
                 throw new ForbiddenException("Bạn không có quyền truy cập thông tin khiếu nại này.");
             }
@@ -161,13 +187,13 @@ public class DisputeService : IDisputeService
         CustomerId = d.CustomerId,
         Reason = d.Reason,
         Description = d.Description,
-        EvidenceUrls = d.EvidenceUrls,
+        EvidenceUrls = d.EvidenceUrls ?? new List<string>(),
         Status = d.Status,
         ResolutionType = d.ResolutionType,
         RefundAmount = d.RefundAmount,
         ResolutionNote = d.ResolutionNote,
         ResolvedBy = d.ResolvedBy,
-        CreatedAt = d.CreatedAt,
-        ResolvedAt = d.ResolvedAt
+        ResolvedAt = d.ResolvedAt,
+        CreatedAt = d.CreatedAt
     };
 }

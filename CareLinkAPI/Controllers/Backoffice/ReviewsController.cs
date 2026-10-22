@@ -1,6 +1,7 @@
 using CareLinkAPI.Common.Models;
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Services.Backoffice;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CareLinkAPI.Controllers.Backoffice;
@@ -19,6 +20,7 @@ public class ReviewsController : ControllerBase
     /// <remarks>
     /// Hệ thống tự xác định Reviewer và Reviewee dựa trên JWT User và Booking context (Khách hàng và Điều dưỡng).
     /// </remarks>
+    [Authorize]
     [HttpPost("api/v1/bookings/{bookingId:guid}/reviews")]
     public async Task<ActionResult<ReviewResponseDto>> SubmitReview(
         [FromRoute] Guid bookingId,

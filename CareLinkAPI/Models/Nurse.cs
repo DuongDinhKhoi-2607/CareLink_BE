@@ -43,6 +43,8 @@ public partial class Nurse
 
     public int Status { get; set; }
 
+    public int PractitionerType { get; set; } = 1; // 1=GraduateNurse, 2=MedicalStudent
+
     public bool IsAcceptingBookings { get; set; } = true;
 
     public DateTime CreatedAt { get; set; }

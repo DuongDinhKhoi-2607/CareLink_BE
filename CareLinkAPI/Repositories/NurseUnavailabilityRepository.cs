@@ -23,6 +23,12 @@ public class NurseUnavailabilityRepository(CareLinkDbContext db) : INurseUnavail
         return ids.ToHashSet();
     }
 
+    public Task<HashSet<Guid>> GetBlockedNurseIdsOnDateAsync(
+        DateOnly date,
+        IEnumerable<Guid> candidateNurseIds,
+        CancellationToken cancellationToken = default) =>
+        GetBlackoutNurseIdsAsync(date, candidateNurseIds.ToList(), cancellationToken);
+
     public Task<bool> IsNurseUnavailableOnDateAsync(
         Guid nurseId,
         DateOnly date,
@@ -31,13 +37,19 @@ public class NurseUnavailabilityRepository(CareLinkDbContext db) : INurseUnavail
             .AsNoTracking()
             .AnyAsync(u => u.NurseId == nurseId && u.Date == date, cancellationToken);
 
+    public Task<bool> IsDateBlockedAsync(
+        Guid nurseId,
+        DateOnly date,
+        CancellationToken cancellationToken = default) =>
+        IsNurseUnavailableOnDateAsync(nurseId, date, cancellationToken);
+
     public Task<List<NurseUnavailability>> GetByNurseIdAsync(
         Guid nurseId,
         CancellationToken cancellationToken = default) =>
         db.NurseUnavailabilities
             .AsNoTracking()
             .Where(u => u.NurseId == nurseId)
-            .OrderBy(u => u.Date)
+            .OrderByDescending(u => u.Date)
             .ToListAsync(cancellationToken);
 
     public Task<NurseUnavailability?> GetByIdAsync(

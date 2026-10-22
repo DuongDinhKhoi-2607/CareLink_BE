@@ -7,15 +7,15 @@ namespace CareLinkAPI.Repositories;
 public class CareRecipientRepository(CareLinkDbContext db) : ICareRecipientRepository
 {
     public Task<CareRecipient?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-        db.CareRecipients.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        db.CareRecipients.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
 
     public Task<CareRecipient?> GetByIdForUpdateAsync(Guid id, CancellationToken cancellationToken = default) =>
-        db.CareRecipients.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        db.CareRecipients.FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
 
     public Task<List<CareRecipient>> GetByCustomerIdAsync(Guid customerId, CancellationToken cancellationToken = default) =>
         db.CareRecipients
             .AsNoTracking()
-            .Where(r => r.CustomerId == customerId)
+            .Where(r => r.CustomerId == customerId && !r.IsDeleted)
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync(cancellationToken);
 

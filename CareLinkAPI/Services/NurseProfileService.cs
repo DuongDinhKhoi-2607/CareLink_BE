@@ -64,6 +64,21 @@ public class NurseProfileService(
         return MapToResponse(nurse);
     }
 
+    public async Task<NurseProfileResponse> SetAcceptingBookingsAsync(
+        Guid userId,
+        bool isAcceptingBookings,
+        CancellationToken cancellationToken = default)
+    {
+        var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
+        nurse.IsAcceptingBookings = isAcceptingBookings;
+        nurse.UpdatedAt = DateTime.UtcNow;
+
+        nurseRepository.Update(nurse);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return MapToResponse(nurse);
+    }
+
     public async Task<List<NurseAvailabilityResponse>> GetNurseAvailabilityAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
@@ -124,7 +139,7 @@ public class NurseProfileService(
                 throw new BadRequestException($"Khung giờ không hợp lệ: {s.StartTime} - {s.EndTime}. Giờ bắt đầu phải trước giờ kết thúc.");
 
             if ((s.EndTime - s.StartTime).TotalMinutes < 60)
-                throw new BadRequestException($"Khung giờ {s.StartTime}-{s.EndTime} không hợp lệ: tối thiểu phải từ 60 phút trở lên.");
+                throw new BadRequestException($"Khung giờ {s.StartTime} - {s.EndTime} phải kéo dài tối thiểu 60 phút.");
         }
 
         // Validate internal overlap
@@ -182,31 +197,17 @@ public class NurseProfileService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<bool> SetAcceptingBookingsAsync(Guid userId, bool isAccepting, CancellationToken cancellationToken = default)
-    {
-        var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
-        nurse.IsAcceptingBookings = isAccepting;
-        nurse.UpdatedAt = DateTime.UtcNow;
-        nurseRepository.Update(nurse);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return nurse.IsAcceptingBookings;
-    }
-
     public async Task<List<NurseUnavailabilityResponse>> GetNurseUnavailabilitiesAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
         var items = await unavailabilityRepository.GetByNurseIdAsync(nurse.Id, cancellationToken);
-        return items.Select(u => new NurseUnavailabilityResponse
-        {
-            Id = u.Id,
-            NurseId = u.NurseId,
-            Date = u.Date,
-            Reason = u.Reason,
-            CreatedAt = u.CreatedAt
-        }).ToList();
+        return items.Select(MapToUnavailabilityResponse).ToList();
     }
 
-    public async Task<NurseUnavailabilityResponse> AddNurseUnavailabilityAsync(Guid userId, CreateNurseUnavailabilityRequest request, CancellationToken cancellationToken = default)
+    public async Task<NurseUnavailabilityResponse> AddNurseUnavailabilityAsync(
+        Guid userId,
+        CreateNurseUnavailabilityRequest request,
+        CancellationToken cancellationToken = default)
     {
         var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -220,7 +221,7 @@ public class NurseProfileService(
             throw new ConflictException("Bạn đã đăng ký ngày nghỉ này trước đó.");
         }
 
-        var unavailability = new NurseUnavailability
+        var item = new NurseUnavailability
         {
             Id = Guid.NewGuid(),
             NurseId = nurse.Id,
@@ -229,20 +230,16 @@ public class NurseProfileService(
             CreatedAt = DateTime.UtcNow
         };
 
-        await unavailabilityRepository.AddAsync(unavailability, cancellationToken);
+        await unavailabilityRepository.AddAsync(item, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new NurseUnavailabilityResponse
-        {
-            Id = unavailability.Id,
-            NurseId = unavailability.NurseId,
-            Date = unavailability.Date,
-            Reason = unavailability.Reason,
-            CreatedAt = unavailability.CreatedAt
-        };
+        return MapToUnavailabilityResponse(item);
     }
 
-    public async Task DeleteNurseUnavailabilityAsync(Guid userId, Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteNurseUnavailabilityAsync(
+        Guid userId,
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var nurse = await GetOrCreateNurseAsync(userId, cancellationToken);
         var item = await unavailabilityRepository.GetByIdAsync(id, cancellationToken)
@@ -250,7 +247,7 @@ public class NurseProfileService(
 
         if (item.NurseId != nurse.Id)
         {
-            throw new ForbiddenException("Không có quyền xóa ngày nghỉ của điều dưỡng khác.");
+            throw new ForbiddenException("Không có quyền xoá ngày nghỉ này.");
         }
 
         unavailabilityRepository.Delete(item);
@@ -271,6 +268,8 @@ public class NurseProfileService(
             UserId = user.Id,
             FullName = user.Email.Split('@')[0],
             Status = (int)NurseStatus.PendingVerification,
+            PractitionerType = (int)NursePractitionerType.GraduateNurse,
+            IsAcceptingBookings = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -301,9 +300,11 @@ public class NurseProfileService(
         WorkDistrict = n.WorkDistrict,
         AverageRating = n.AverageRating,
         TotalReviews = n.TotalReviews,
+        PractitionerType = n.PractitionerType,
+        PractitionerTypeName = ((NursePractitionerType)n.PractitionerType).ToString(),
+        IsAcceptingBookings = n.IsAcceptingBookings,
         Status = (NurseStatus)n.Status,
         StatusName = ((NurseStatus)n.Status).ToString(),
-        IsAcceptingBookings = n.IsAcceptingBookings,
         CreatedAt = n.CreatedAt,
         UpdatedAt = n.UpdatedAt
     };
@@ -327,5 +328,14 @@ public class NurseProfileService(
         StartTime = a.StartTime,
         EndTime = a.EndTime,
         IsActive = a.IsActive
+    };
+
+    private static NurseUnavailabilityResponse MapToUnavailabilityResponse(NurseUnavailability u) => new()
+    {
+        Id = u.Id,
+        NurseId = u.NurseId,
+        Date = u.Date,
+        Reason = u.Reason,
+        CreatedAt = u.CreatedAt
     };
 }

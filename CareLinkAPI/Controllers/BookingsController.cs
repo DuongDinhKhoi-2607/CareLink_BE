@@ -80,9 +80,12 @@ public class BookingsController(IBookingService bookingService) : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
-    public async Task<ActionResult<BookingResponse>> Start(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<BookingResponse>> Start(
+        Guid id,
+        [FromBody] StartBookingRequest? request,
+        CancellationToken cancellationToken)
     {
-        var booking = await bookingService.StartAsync(this.GetCurrentUserId(), id, cancellationToken);
+        var booking = await bookingService.StartAsync(this.GetCurrentUserId(), id, request, cancellationToken);
         return Ok(booking);
     }
 

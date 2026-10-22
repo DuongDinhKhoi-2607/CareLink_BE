@@ -60,4 +60,3 @@ public class UpdateAcceptingBookingsRequest
     [Required]
     public bool IsAcceptingBookings { get; set; }
 }
-

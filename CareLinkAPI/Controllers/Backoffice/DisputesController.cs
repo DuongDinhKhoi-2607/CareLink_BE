@@ -1,12 +1,12 @@
 using CareLinkAPI.Common.Models;
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Services.Backoffice;
-using Microsoft.AspNetCore.Mvc;
-
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace CareLinkAPI.Controllers.Backoffice;
 
+[Authorize]
 [ApiController]
 public class DisputesController : ControllerBase
 {
@@ -18,7 +18,7 @@ public class DisputesController : ControllerBase
     }
 
     /// <summary>
-    /// Khách hàng tạo khiếu nại cho ca chăm sóc
+    /// Khách hàng tạo khiếu nại cho ca chăm sóc đã hoàn tất
     /// </summary>
     [HttpPost("api/v1/bookings/{bookingId:guid}/disputes")]
     public async Task<ActionResult<DisputeResponseDto>> Create(
@@ -71,4 +71,3 @@ public class DisputesController : ControllerBase
         return Ok(result);
     }
 }
-

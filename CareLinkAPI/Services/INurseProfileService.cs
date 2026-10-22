@@ -8,6 +8,8 @@ public interface INurseProfileService
 
     Task<NurseProfileResponse> UpdateNurseProfileAsync(Guid userId, UpdateNurseProfileRequest request, CancellationToken cancellationToken = default);
 
+    Task<NurseProfileResponse> SetAcceptingBookingsAsync(Guid userId, bool isAcceptingBookings, CancellationToken cancellationToken = default);
+
     Task<List<NurseAvailabilityResponse>> GetNurseAvailabilityAsync(Guid userId, CancellationToken cancellationToken = default);
 
     Task<NurseAvailabilityResponse> AddNurseAvailabilitySlotAsync(Guid userId, CreateNurseAvailabilityRequest request, CancellationToken cancellationToken = default);
@@ -15,8 +17,6 @@ public interface INurseProfileService
     Task<List<NurseAvailabilityResponse>> SetNurseAvailabilityScheduleAsync(Guid userId, SetNurseAvailabilityRequest request, CancellationToken cancellationToken = default);
 
     Task DeleteNurseAvailabilitySlotAsync(Guid userId, Guid slotId, CancellationToken cancellationToken = default);
-
-    Task<bool> SetAcceptingBookingsAsync(Guid userId, bool isAccepting, CancellationToken cancellationToken = default);
 
     Task<List<NurseUnavailabilityResponse>> GetNurseUnavailabilitiesAsync(Guid userId, CancellationToken cancellationToken = default);
 

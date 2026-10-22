@@ -18,7 +18,6 @@ public partial class Service
     public int DurationMinutes { get; set; }
 
     public bool IsActive { get; set; }
-
     public bool RequiresLicense { get; set; } = false;
 
     public DateTime CreatedAt { get; set; }
