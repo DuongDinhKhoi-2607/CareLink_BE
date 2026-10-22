@@ -167,11 +167,11 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.StartedAt).HasColumnName("started_at");
             entity.Property(e => e.CheckInLatitude)
                 .HasPrecision(10, 7)
-                .HasColumnName("checkin_latitude");
+                .HasColumnName("check_in_latitude");
             entity.Property(e => e.CheckInLongitude)
                 .HasPrecision(10, 7)
-                .HasColumnName("checkin_longitude");
-            entity.Property(e => e.CheckInNote).HasColumnName("checkin_note");
+                .HasColumnName("check_in_longitude");
+            entity.Property(e => e.CheckInNote).HasColumnName("check_in_note");
             entity.Property(e => e.Status)
                 .HasDefaultValue(1)
                 .HasColumnName("status");
