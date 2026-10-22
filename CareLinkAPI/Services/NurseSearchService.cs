@@ -12,6 +12,7 @@ namespace CareLinkAPI.Services;
 public class NurseSearchService(
     INurseRepository nurses,
     INurseAvailabilityRepository availabilities,
+    INurseUnavailabilityRepository unavailabilities,
     IBookingRepository bookings,
     IServiceRepository services,
     IOptions<BookingOptions> options) : INurseSearchService
@@ -21,9 +22,18 @@ public class NurseSearchService(
         CancellationToken cancellationToken = default)
     {
         ValidateLocation(request);
-        var window = await ResolveTimeWindowAsync(request, cancellationToken);
+        var (window, service) = await ResolveTimeWindowAndServiceAsync(request, cancellationToken);
 
         var candidates = await nurses.SearchActiveAsync(request.District, request.MinRating, cancellationToken);
+
+        // Lớp 1: Năng lực Y tế - nếu dịch vụ yêu cầu CCHN, loại bỏ Sinh viên Y / không có CCHN
+        if (service is not null && service.RequiresLicense && candidates.Count > 0)
+        {
+            candidates = candidates
+                .Where(n => !string.IsNullOrWhiteSpace(n.LicenseNumber)
+                            && (n.EducationLevel == null || !n.EducationLevel.ToLower().Contains("sinh viên")))
+                .ToList();
+        }
 
         if (window is not null && candidates.Count > 0)
         {
@@ -60,9 +70,9 @@ public class NurseSearchService(
     }
 
     /// <summary>
-    /// Works out the requested [start, end) window in UTC. Returns null when the caller did not ask for a slot.
+    /// Works out the requested [start, end) window in UTC and resolves the service if requested.
     /// </summary>
-    private async Task<(DateTime StartUtc, DateTime EndUtc)?> ResolveTimeWindowAsync(
+    private async Task<((DateTime StartUtc, DateTime EndUtc)? Window, Service? Service)> ResolveTimeWindowAndServiceAsync(
         NurseSearchRequest request,
         CancellationToken cancellationToken)
     {
@@ -85,7 +95,7 @@ public class NurseSearchService(
                 throw new BadRequestException("EndTime requires StartTime.");
             }
 
-            return null;
+            return (null, service);
         }
 
         var startUtc = request.StartTime.Value.UtcDateTime;
@@ -114,10 +124,10 @@ public class NurseSearchService(
             throw new BadRequestException("The requested time window must be within a single day.");
         }
 
-        return (startUtc, endUtc);
+        return ((startUtc, endUtc), service);
     }
 
-    /// <summary>Search-03: keep nurses that configured a covering availability and have no overlapping booking.</summary>
+    /// <summary>Search-03: keep nurses that configured a covering availability, have no blackout date, and no overlapping booking.</summary>
     private async Task<List<Nurse>> ExcludeUnavailableAsync(
         List<Nurse> candidates,
         (DateTime StartUtc, DateTime EndUtc) window,
@@ -132,6 +142,12 @@ public class NurseSearchService(
             candidateIds,
             cancellationToken);
 
+        var dateOnly = DateOnly.FromDateTime(window.StartUtc);
+        var blackoutNurseIds = await unavailabilities.GetBlackoutNurseIdsAsync(
+            dateOnly,
+            candidateIds,
+            cancellationToken);
+
         var pendingPaymentCutoff = DateTime.UtcNow.AddMinutes(-options.Value.PendingPaymentHoldMinutes);
         var busy = await bookings.GetBusyNurseIdsAsync(
             window.StartUtc,
@@ -140,7 +156,11 @@ public class NurseSearchService(
             candidateIds,
             cancellationToken);
 
-        return candidates.Where(n => available.Contains(n.Id) && !busy.Contains(n.Id)).ToList();
+        return candidates
+            .Where(n => available.Contains(n.Id)
+                        && !blackoutNurseIds.Contains(n.Id)
+                        && !busy.Contains(n.Id))
+            .ToList();
     }
 
     /// <summary>Search-02: Haversine distance; nearest first, then best rated.</summary>

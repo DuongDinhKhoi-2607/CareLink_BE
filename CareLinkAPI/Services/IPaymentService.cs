@@ -9,6 +9,7 @@ public interface IPaymentService
     Task<CreatePaymentLinkResponse> CreatePaymentLinkAsync(
         Guid userId,
         Guid bookingId,
+        decimal? customAmount = null,
         string? clientReturnUrl = null,
         string? clientCancelUrl = null,
         CancellationToken cancellationToken = default);

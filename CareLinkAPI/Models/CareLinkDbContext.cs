@@ -34,6 +34,8 @@ public partial class CareLinkDbContext : DbContext
 
     public virtual DbSet<NurseAvailability> NurseAvailabilities { get; set; }
 
+    public virtual DbSet<NurseUnavailability> NurseUnavailabilities { get; set; }
+
     public virtual DbSet<NurseDocument> NurseDocuments { get; set; }
 
     public virtual DbSet<Payment> Payments { get; set; }
@@ -421,6 +423,9 @@ public partial class CareLinkDbContext : DbContext
                 .HasDefaultValue(10)
                 .HasColumnName("service_radius_km");
             entity.Property(e => e.Status).HasColumnName("status");
+            entity.Property(e => e.IsAcceptingBookings)
+                .HasDefaultValue(true)
+                .HasColumnName("is_accepting_bookings");
             entity.Property(e => e.TotalReviews).HasColumnName("total_reviews");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
@@ -457,6 +462,33 @@ public partial class CareLinkDbContext : DbContext
             entity.HasOne(d => d.Nurse).WithMany(p => p.NurseAvailabilities)
                 .HasForeignKey(d => d.NurseId)
                 .HasConstraintName("fk_availability_nurse");
+        });
+
+        modelBuilder.Entity<NurseUnavailability>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("nurse_unavailabilities_pkey");
+
+            entity.ToTable("nurse_unavailabilities");
+
+            entity.HasIndex(e => new { e.NurseId, e.Date }, "uq_nurse_date").IsUnique();
+            entity.HasIndex(e => e.NurseId, "idx_nurse_unavailabilities_nurse");
+            entity.HasIndex(e => e.Date, "idx_nurse_unavailabilities_date");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.NurseId).HasColumnName("nurse_id");
+            entity.Property(e => e.Date).HasColumnName("date");
+            entity.Property(e => e.Reason)
+                .HasMaxLength(255)
+                .HasColumnName("reason");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Nurse).WithMany(p => p.NurseUnavailabilities)
+                .HasForeignKey(d => d.NurseId)
+                .HasConstraintName("fk_nurse_unavailabilities_nurse");
         });
 
         modelBuilder.Entity<NurseDocument>(entity =>
@@ -657,6 +689,9 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
+            entity.Property(e => e.RequiresLicense)
+                .HasDefaultValue(false)
+                .HasColumnName("requires_license");
             entity.Property(e => e.RequiredSkills).HasColumnName("required_skills");
             entity.Property(e => e.ServiceName)
                 .HasColumnType("character varying")

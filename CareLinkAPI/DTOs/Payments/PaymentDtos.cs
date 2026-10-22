@@ -22,6 +22,17 @@ public class PaymentResponse
     public DateTime CreatedAt { get; init; }
 }
 
+/// <summary>Pay-01: parameters for creating a PayOS checkout link (FE decides amount or URLs).</summary>
+public class CreatePaymentLinkRequestDto
+{
+    /// <summary>Số tiền thanh toán do FE quyết định (ví dụ: phí sàn, đặt cọc, hoặc toàn bộ ca). Nếu không truyền sẽ lấy theo tổng giá ca.</summary>
+    [Range(1000, double.MaxValue, ErrorMessage = "Số tiền thanh toán tối thiểu là 1.000 VNĐ.")]
+    public decimal? Amount { get; init; }
+
+    public string? ReturnUrl { get; init; }
+    public string? CancelUrl { get; init; }
+}
+
 /// <summary>Pay-01: result of creating a PayOS checkout link.</summary>
 public class CreatePaymentLinkResponse
 {

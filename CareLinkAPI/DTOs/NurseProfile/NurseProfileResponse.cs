@@ -24,6 +24,7 @@ public class NurseProfileResponse
     public int TotalReviews { get; set; }
     public NurseStatus Status { get; set; }
     public string StatusName { get; set; } = null!;
+    public bool IsAcceptingBookings { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

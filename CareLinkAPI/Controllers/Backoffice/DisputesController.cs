@@ -3,6 +3,8 @@ using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Services.Backoffice;
 using Microsoft.AspNetCore.Mvc;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace CareLinkAPI.Controllers.Backoffice;
 
 [ApiController]
@@ -31,6 +33,7 @@ public class DisputesController : ControllerBase
     /// <summary>
     /// Lấy danh sách tất cả khiếu nại phân trang và lọc theo trạng thái (Dành cho Quản trị viên)
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpGet("api/v1/admin/disputes")]
     public async Task<ActionResult<PagedResult<DisputeResponseDto>>> GetAllAdmin(
         [FromQuery] int pageNumber = 1,
@@ -45,6 +48,7 @@ public class DisputesController : ControllerBase
     /// <summary>
     /// Quản trị viên xử lý khiếu nại (Hoàn tiền hoặc Bác bỏ)
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpPut("api/v1/admin/disputes/{id:guid}")]
     public async Task<ActionResult<DisputeResponseDto>> Resolve(
         [FromRoute] Guid id,

@@ -36,3 +36,28 @@ public class SetNurseAvailabilityRequest
     [Required]
     public List<CreateNurseAvailabilityRequest> Schedules { get; set; } = new();
 }
+
+public class NurseUnavailabilityResponse
+{
+    public Guid Id { get; set; }
+    public Guid NurseId { get; set; }
+    public DateOnly Date { get; set; }
+    public string? Reason { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class CreateNurseUnavailabilityRequest
+{
+    [Required]
+    public DateOnly Date { get; set; }
+
+    [MaxLength(255)]
+    public string? Reason { get; set; }
+}
+
+public class UpdateAcceptingBookingsRequest
+{
+    [Required]
+    public bool IsAcceptingBookings { get; set; }
+}
+

@@ -1,11 +1,13 @@
 using CareLinkAPI.Common.Models;
 using CareLinkAPI.DTOs.Verification;
 using CareLinkAPI.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CareLinkAPI.Controllers.Backoffice;
 
 [ApiController]
+[Authorize(Roles = "Admin")]
 [Route("api/v1/admin/nurse-verifications")]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]

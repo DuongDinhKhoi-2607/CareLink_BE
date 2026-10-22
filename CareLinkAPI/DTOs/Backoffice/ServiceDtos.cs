@@ -17,6 +17,8 @@ public class CreateServiceDto
 
     [Range(15, 1440, ErrorMessage = "Thời lượng dịch vụ từ 15 đến 1440 phút")]
     public int DurationMinutes { get; set; } = 60;
+
+    public bool RequiresLicense { get; set; } = false;
 }
 
 public class UpdateServiceDto
@@ -34,6 +36,8 @@ public class UpdateServiceDto
 
     [Range(15, 1440, ErrorMessage = "Thời lượng dịch vụ từ 15 đến 1440 phút")]
     public int DurationMinutes { get; set; } = 60;
+
+    public bool RequiresLicense { get; set; } = false;
 }
 
 public class UpdateServiceStatusDto
@@ -50,5 +54,6 @@ public class ServiceResponseDto
     public decimal BasePrice { get; set; }
     public int DurationMinutes { get; set; }
     public bool IsActive { get; set; }
+    public bool RequiresLicense { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }

@@ -6,12 +6,14 @@ using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Repositories;
 
+using CareLinkAPI.Common.Options;
+using Microsoft.Extensions.Options;
+
 namespace CareLinkAPI.Services.Backoffice;
 
 public class AdminDashboardService : IAdminDashboardService
 {
-    private const decimal PlatformFeePerBooking = 50000m; // 50,000 VND / booking (Fixed fee rule)
-
+    private readonly decimal _platformFeePerBooking;
     private readonly IServiceRepository _serviceRepository;
     private readonly IReviewRepository _reviewRepository;
     private readonly IDisputeRepository _disputeRepository;
@@ -23,13 +25,15 @@ public class AdminDashboardService : IAdminDashboardService
         IReviewRepository reviewRepository,
         IDisputeRepository disputeRepository,
         IBookingQueryService bookingQueryService,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IOptions<PayOsOptions> payOsOptions)
     {
         _serviceRepository = serviceRepository;
         _reviewRepository = reviewRepository;
         _disputeRepository = disputeRepository;
         _bookingQueryService = bookingQueryService;
         _currentUserService = currentUserService;
+        _platformFeePerBooking = payOsOptions.Value.PlatformFeePerBooking > 0 ? payOsOptions.Value.PlatformFeePerBooking : 60_000m;
     }
 
     public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken ct = default)
@@ -46,7 +50,7 @@ public class AdminDashboardService : IAdminDashboardService
         var platformRating = await _reviewRepository.CalculatePlatformAverageRatingAsync(ct);
 
         // Platform fee rule: 50,000 VND per completed booking
-        var platformFee = bookingMetrics.CompletedBookings * PlatformFeePerBooking;
+        var platformFee = bookingMetrics.CompletedBookings * _platformFeePerBooking;
 
         return new DashboardSummaryDto
         {
@@ -73,7 +77,7 @@ public class AdminDashboardService : IAdminDashboardService
         }
 
         var bookingMetrics = await _bookingQueryService.GetBookingMetricsAsync(ct);
-        var platformFee = bookingMetrics.CompletedBookings * PlatformFeePerBooking;
+        var platformFee = bookingMetrics.CompletedBookings * _platformFeePerBooking;
 
         return new RevenueMetricDto
         {

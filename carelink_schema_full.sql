@@ -87,6 +87,7 @@ CREATE TABLE public.care_recipients (
     address         VARCHAR,    -- Địa chỉ nhận chăm sóc
     latitude        NUMERIC(10, 7),
     longitude       NUMERIC(10, 7),
+    is_deleted      BOOLEAN     NOT NULL DEFAULT false, -- Soft delete
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT care_recipients_pkey         PRIMARY KEY (id),
     CONSTRAINT fk_recipient_customer        FOREIGN KEY (customer_id) REFERENCES public.customers(id) ON DELETE CASCADE
@@ -120,6 +121,7 @@ CREATE TABLE public.nurses (
     status              INTEGER     NOT NULL DEFAULT 0
                         CHECK (status IN (0, 1, 2, 3)),
                         -- 0=PendingVerification | 1=Active | 2=Suspended | 3=Rejected
+    is_accepting_bookings BOOLEAN   NOT NULL DEFAULT true, -- Online/Offline switch
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT nurses_pkey          PRIMARY KEY (id),
@@ -171,6 +173,18 @@ CREATE TABLE public.nurse_availabilities (
     CONSTRAINT fk_availability_nurse            FOREIGN KEY (nurse_id) REFERENCES public.nurses(id) ON DELETE CASCADE
 );
 
+-- User-06b: Ngoại lệ lịch rảnh / Ngày nghỉ đột xuất (Blackout Dates)
+CREATE TABLE public.nurse_unavailabilities (
+    id          UUID        NOT NULL DEFAULT gen_random_uuid(),
+    nurse_id    UUID        NOT NULL,
+    date        DATE        NOT NULL,
+    reason      VARCHAR(255),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT nurse_unavailabilities_pkey      PRIMARY KEY (id),
+    CONSTRAINT uq_nurse_date                    UNIQUE (nurse_id, date),
+    CONSTRAINT fk_unavailability_nurse          FOREIGN KEY (nurse_id) REFERENCES public.nurses(id) ON DELETE CASCADE
+);
+
 -- Module 9: Danh mục dịch vụ
 CREATE TABLE public.services (
     id              UUID        NOT NULL DEFAULT gen_random_uuid(),
@@ -180,6 +194,7 @@ CREATE TABLE public.services (
     base_price      NUMERIC     NOT NULL CHECK (base_price >= 0),
     duration_minutes INTEGER    NOT NULL DEFAULT 60,  -- Thời lượng dự kiến
     is_active       BOOLEAN     NOT NULL DEFAULT true, -- Serv-02
+    requires_license BOOLEAN    NOT NULL DEFAULT false, -- Yêu cầu CCHN
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT services_pkey    PRIMARY KEY (id)
 );

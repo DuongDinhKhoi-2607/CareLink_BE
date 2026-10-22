@@ -1,10 +1,12 @@
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Services.Backoffice;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CareLinkAPI.Controllers.Backoffice;
 
 [ApiController]
+[Authorize(Roles = "Admin")]
 [Route("api/v1/admin/dashboard")]
 public class AdminDashboardController : ControllerBase
 {

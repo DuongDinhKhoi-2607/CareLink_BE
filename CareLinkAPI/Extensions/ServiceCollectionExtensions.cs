@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INurseRepository, NurseRepository>();
         services.AddScoped<INurseDocumentRepository, NurseDocumentRepository>();
         services.AddScoped<INurseAvailabilityRepository, NurseAvailabilityRepository>();
+        services.AddScoped<INurseUnavailabilityRepository, NurseUnavailabilityRepository>();
         services.AddScoped<IServiceRepository, ServiceRepository>();
         services.AddScoped<IBookingRepository, BookingRepository>();
         services.AddScoped<IHealthRecordRepository, HealthRecordRepository>();

@@ -147,4 +147,58 @@ public class NurseProfileController(
         var result = await nurseVerificationService.GetVerificationStatusAsync(this.GetCurrentUserId(), cancellationToken);
         return Ok(result);
     }
+
+    // ─── ACCEPTING BOOKINGS & UNAVAILABILITIES ──────────────────────────────────
+    /// <summary>
+    /// Bật hoặc tắt trạng thái sẵn sàng nhận ca của Điều dưỡng (Online/Offline).
+    /// </summary>
+    [HttpPut("accepting-bookings")]
+    [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
+    public async Task<ActionResult<bool>> SetAcceptingBookings(
+        [FromBody] UpdateAcceptingBookingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await nurseProfileService.SetAcceptingBookingsAsync(this.GetCurrentUserId(), request.IsAcceptingBookings, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Lấy danh sách các ngày nghỉ đột xuất (Blackout dates / Nghỉ phép) của Điều dưỡng.
+    /// </summary>
+    [HttpGet("unavailabilities")]
+    [ProducesResponseType(typeof(List<NurseUnavailabilityResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<NurseUnavailabilityResponse>>> GetUnavailabilities(CancellationToken cancellationToken)
+    {
+        var result = await nurseProfileService.GetNurseUnavailabilitiesAsync(this.GetCurrentUserId(), cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Đăng ký một ngày nghỉ đột xuất (Blackout date).
+    /// </summary>
+    [HttpPost("unavailabilities")]
+    [ProducesResponseType(typeof(NurseUnavailabilityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<NurseUnavailabilityResponse>> AddUnavailability(
+        [FromBody] CreateNurseUnavailabilityRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await nurseProfileService.AddNurseUnavailabilityAsync(this.GetCurrentUserId(), request, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Hủy một ngày nghỉ đột xuất để mở lại lịch rảnh.
+    /// </summary>
+    [HttpDelete("unavailabilities/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteUnavailability(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        await nurseProfileService.DeleteNurseUnavailabilityAsync(this.GetCurrentUserId(), id, cancellationToken);
+        return NoContent();
+    }
 }

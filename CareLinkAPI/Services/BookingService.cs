@@ -18,6 +18,7 @@ public class BookingService(
     IBookingRepository bookings,
     INurseRepository nurses,
     INurseAvailabilityRepository availabilities,
+    INurseUnavailabilityRepository nurseUnavailabilities,
     ICustomerRepository customers,
     ICareRecipientRepository recipients,
     IAddressRepository addresses,
@@ -73,6 +74,15 @@ public class BookingService(
         {
             throw new BadRequestException("Nurse is not available for booking.");
         }
+        if (!nurse.IsAcceptingBookings)
+        {
+            throw new BusinessRuleException("Điều dưỡng hiện đang tạm dừng nhận ca mới.");
+        }
+
+        if (service.RequiresLicense && (string.IsNullOrWhiteSpace(nurse.LicenseNumber) || nurse.EducationLevel?.ToLower().Contains("sinh viên") == true))
+        {
+            throw new BusinessRuleException("Dịch vụ này yêu cầu Điều dưỡng có chứng chỉ hành nghề (CCHN). Sinh viên y khoa không được phép nhận ca này.");
+        }
 
         var recipient = await recipients.GetByIdAsync(request.RecipientId, cancellationToken)
                         ?? throw new NotFoundException("Care recipient not found.");
@@ -104,6 +114,12 @@ public class BookingService(
             if (!available.Contains(nurse.Id))
             {
                 throw new BusinessRuleException("The nurse is not available during the requested time.");
+            }
+
+            var dateOnly = DateOnly.FromDateTime(startUtc);
+            if (await nurseUnavailabilities.IsNurseUnavailableOnDateAsync(nurse.Id, dateOnly, cancellationToken))
+            {
+                throw new BusinessRuleException("Điều dưỡng đã đăng ký nghỉ vào ngày này.");
             }
 
             var busy = await bookings.GetBusyNurseIdsAsync(
@@ -276,16 +292,22 @@ public class BookingService(
             booking.Status = (int)BookingStatus.Completed;
             booking.CompletedAt = now;
 
+            var paidAmount = booking.Payment?.Amount ?? 0m;
+            var remainingDirect = Math.Max(0, booking.TotalPrice - paidAmount);
+            var paymentNotice = remainingDirect > 0
+                ? $" Quý khách vui lòng thanh toán trực tiếp {remainingDirect.ToString("N0", ViCulture)}đ cho điều dưỡng."
+                : string.Empty;
+
             await NotifyAsync(
                 booking.Customer.UserId,
                 "Ca chăm sóc đã hoàn thành",
-                $"Điều dưỡng {booking.Nurse.FullName} đã hoàn thành ca chăm sóc. Hãy xem báo cáo y tế và đánh giá dịch vụ.",
+                $"Điều dưỡng {booking.Nurse.FullName} đã hoàn thành ca chăm sóc. Hãy xem báo cáo y tế và đánh giá dịch vụ.{paymentNotice}",
                 NotificationTypes.BookingCompleted,
                 booking.Id,
                 cancellationToken);
 
-            // Pay-03: Credit nurse wallet (platform fee deducted inside WalletService)
-            var platformFee = booking.Payment?.PlatformFee ?? 50_000m;
+            // Pay-03: Record completed booking earning in wallet
+            var platformFee = booking.Payment?.PlatformFee ?? 0m;
             await walletService.SettleBookingEarningAsync(
                 booking.NurseId,
                 booking.Id,
@@ -603,33 +625,20 @@ public class BookingService(
         var previous = (BookingStatus)booking.Status;
         BookingStateMachine.EnsureCanTransition(previous, BookingStatus.Canceled);
 
-        var refundPercent = BookingCancellationPolicy.GetRefundPercent(previous, canceledBy, booking.ScheduledStart, now);
-
         booking.Status = (int)BookingStatus.Canceled;
         booking.CancelReason = reason;
         booking.CanceledBy = (int)canceledBy;
         booking.CanceledAt = now;
 
-        decimal refund = 0m;
         if (booking.Payment is { } payment)
         {
-            if (payment.Status == (int)PaymentStatus.Paid)
-            {
-                refund = Math.Round(payment.Amount * refundPercent / 100m, 0, MidpointRounding.AwayFromZero);
-                if (refund > 0)
-                {
-                    payment.Status = (int)PaymentStatus.Refunded;
-                    payment.RefundedAmount = refund;
-                    payment.RefundedAt = now;
-                }
-            }
-            else if (payment.Status == (int)PaymentStatus.Pending)
+            if (payment.Status == (int)PaymentStatus.Pending)
             {
                 payment.Status = (int)PaymentStatus.Failed;
             }
         }
 
-        return refund;
+        return 0m;
     }
 
     private Task NotifyAsync(

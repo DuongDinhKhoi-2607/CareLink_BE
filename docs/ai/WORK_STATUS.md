@@ -17,10 +17,10 @@
 | Phân hệ / Tính năng | Người phụ trách | Trạng thái nghiệm thu | Files / Controllers liên quan | Ghi chú & Bằng chứng kiểm thử |
 | :--- | :---: | :---: | :--- | :--- |
 | **Xác thực OTP & Reset Password** | Vy | 🥇 `Runtime-Verified` | `AuthController.cs`, `AuthService.cs`, `EmailService.cs` | Băm mã OTP, gửi email SMTP thành công, đồng bộ Google OAuth role mapping. |
-| **Thanh toán PayOS & Quyết toán ví** | Khôi | 💎 `E2E-Verified` | `PaymentsController.cs`, `PaymentService.cs`, `WalletService.cs` | Đính kèm `bookingId` vào redirect URL, webhook cập nhật trạng thái tự động. |
-| **Đồng bộ cấu hình Phí sàn 60.000đ** | Khôi / Team | 🥈 `Build-Passed` | `PayOsOptions.cs`, `AdminDashboardService.cs` | Cần cập nhật cấu hình `PlatformFeePerBooking = 60000` trong `appsettings.json` để khớp với FE. |
+| **Thanh toán PayOS & Quyết toán ví (Luồng 4 & 6)** | Khôi | 💎 `Test-Passed` | `PaymentsController.cs`, `PaymentService.cs`, `WalletService.cs` | Bỏ ép cứng 60k, FE tự quyết định số tiền chuyển, mô hình thanh toán trực tiếp, loại bỏ hoàn tiền. Unit test pass 32/32. |
+| **Tìm kiếm & Khớp lịch Điều dưỡng (Luồng 3)** | Khôi / Team | 🥇 `Test-Passed` | `NurseSearchService.cs`, `BookingService.cs`, `NurseProfileController.cs` | Buffer di chuyển 30p, hàng rào CCHN chặn sinh viên y, ngày nghỉ đột xuất, nút gạt Online/Offline. |
 | **Hội thoại & Đề xuất ca (Chat)** | Khôi / Vy | 🥇 `Runtime-Verified` | `ConversationsController.cs`, `ChatService.cs` | Hỗ trợ nhắn tin hai chiều và gửi đề xuất ca trực tiếp trong tin nhắn. |
-| **Hệ thống Thông báo & Unit Tests** | Khôi | 🥇 `Test-Passed` | `NotificationsController.cs`, `NotificationServiceTests.cs` | Đã viết bộ test tự động trong `CareLinkAPI.Tests`, test pass 6/6 bài (151ms). |
+| **Hệ thống Thông báo & Unit Tests** | Khôi | 🥇 `Test-Passed` | `NotificationsController.cs`, `NotificationServiceTests.cs`, `CareLinkAPI.Tests` | Đã viết bộ test tự động trong `CareLinkAPI.Tests`, test pass 32/32 bài (55ms). |
 | **Duyệt hồ sơ Điều dưỡng (Verification)** | Quốc | 🥈 `Build-Passed` | `Backoffice/NurseVerificationsController.cs` | Nộp hồ sơ và admin duyệt/từ chối kèm lý do. Đang chờ kiểm thử tải file trên Supabase. |
 | **Cấu hình Docker & Render Deployment** | Khôi / Team | 🥇 `Runtime-Verified` | `Dockerfile`, `render.yaml`, `Program.cs` | Đã cấu hình cổng Render động, build Docker image thành công, deploy Render ổn định. |
 

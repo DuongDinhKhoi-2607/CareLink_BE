@@ -14,19 +14,26 @@ public class PaymentsController(IPaymentService paymentService, ILogger<Payments
 {
     private static readonly JsonSerializerOptions WebhookJson = new(JsonSerializerDefaults.Web);
 
-    /// <summary>Pay-01: Khách hàng tạo link thanh toán PayOS cho booking đang chờ thanh toán.</summary>
+    /// <summary>Pay-01: Khách hàng tạo link thanh toán PayOS cho booking đang chờ thanh toán (FE quyết định số tiền chuyển).</summary>
     [HttpPost("api/v1/bookings/{bookingId:guid}/payments")]
     [ProducesResponseType(typeof(CreatePaymentLinkResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CreatePaymentLinkResponse>> CreatePaymentLink(
         Guid bookingId,
+        [FromQuery] decimal? amount,
         [FromQuery] string? returnUrl,
         [FromQuery] string? cancelUrl,
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CreatePaymentLinkRequestDto? body,
         CancellationToken ct)
     {
+        var effectiveAmount = body?.Amount ?? amount;
+        var effectiveReturnUrl = body?.ReturnUrl ?? returnUrl;
+        var effectiveCancelUrl = body?.CancelUrl ?? cancelUrl;
+
         var clientOrigin = Request.Headers.Origin.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(clientOrigin))
         {
@@ -36,9 +43,6 @@ public class PaymentsController(IPaymentService paymentService, ILogger<Payments
                 clientOrigin = $"{refUri.Scheme}://{refUri.Authority}";
             }
         }
-
-        var effectiveReturnUrl = returnUrl;
-        var effectiveCancelUrl = cancelUrl;
 
         if (string.IsNullOrWhiteSpace(effectiveReturnUrl) && !string.IsNullOrWhiteSpace(clientOrigin))
         {
@@ -51,7 +55,7 @@ public class PaymentsController(IPaymentService paymentService, ILogger<Payments
         }
 
         var result = await paymentService.CreatePaymentLinkAsync(
-            this.GetCurrentUserId(), bookingId, effectiveReturnUrl, effectiveCancelUrl, ct);
+            this.GetCurrentUserId(), bookingId, effectiveAmount, effectiveReturnUrl, effectiveCancelUrl, ct);
         return Ok(result);
     }
 
