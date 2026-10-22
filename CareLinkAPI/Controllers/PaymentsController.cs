@@ -21,9 +21,37 @@ public class PaymentsController(IPaymentService paymentService, ILogger<Payments
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<CreatePaymentLinkResponse>> CreatePaymentLink(Guid bookingId, CancellationToken ct)
+    public async Task<ActionResult<CreatePaymentLinkResponse>> CreatePaymentLink(
+        Guid bookingId,
+        [FromQuery] string? returnUrl,
+        [FromQuery] string? cancelUrl,
+        CancellationToken ct)
     {
-        var result = await paymentService.CreatePaymentLinkAsync(this.GetCurrentUserId(), bookingId, ct);
+        var clientOrigin = Request.Headers.Origin.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(clientOrigin))
+        {
+            var referer = Request.Headers.Referer.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(referer) && Uri.TryCreate(referer, UriKind.Absolute, out var refUri))
+            {
+                clientOrigin = $"{refUri.Scheme}://{refUri.Authority}";
+            }
+        }
+
+        var effectiveReturnUrl = returnUrl;
+        var effectiveCancelUrl = cancelUrl;
+
+        if (string.IsNullOrWhiteSpace(effectiveReturnUrl) && !string.IsNullOrWhiteSpace(clientOrigin))
+        {
+            effectiveReturnUrl = $"{clientOrigin.TrimEnd('/')}/payment/success";
+        }
+
+        if (string.IsNullOrWhiteSpace(effectiveCancelUrl) && !string.IsNullOrWhiteSpace(clientOrigin))
+        {
+            effectiveCancelUrl = $"{clientOrigin.TrimEnd('/')}/payment/cancel";
+        }
+
+        var result = await paymentService.CreatePaymentLinkAsync(
+            this.GetCurrentUserId(), bookingId, effectiveReturnUrl, effectiveCancelUrl, ct);
         return Ok(result);
     }
 
