@@ -51,6 +51,7 @@ public class CreateNurseUnavailabilityRequest
     [Required]
     public DateOnly Date { get; set; }
 
+    [MaxLength(255)]
     public string? Reason { get; set; }
 }
 

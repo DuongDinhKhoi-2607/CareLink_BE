@@ -1,6 +1,7 @@
 using CareLinkAPI.Common.Models;
 using CareLinkAPI.DTOs.Backoffice;
 using CareLinkAPI.Services.Backoffice;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CareLinkAPI.Controllers.Backoffice;
@@ -29,6 +30,7 @@ public class ServicesController : ControllerBase
     /// <summary>
     /// Lấy danh sách dịch vụ phân trang, hỗ trợ tìm kiếm và lọc trạng thái (Dành cho Quản trị viên)
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpGet("admin")]
     public async Task<ActionResult<PagedResult<ServiceResponseDto>>> GetAllServicesAdmin(
         [FromQuery] int pageNumber = 1,
@@ -54,6 +56,7 @@ public class ServicesController : ControllerBase
     /// <summary>
     /// Tạo mới dịch vụ chăm sóc (Chỉ Quản trị viên)
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<ActionResult<ServiceResponseDto>> Create([FromBody] CreateServiceDto dto, CancellationToken ct)
     {
@@ -64,6 +67,7 @@ public class ServicesController : ControllerBase
     /// <summary>
     /// Cập nhật thông tin dịch vụ (Chỉ Quản trị viên)
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<ServiceResponseDto>> Update(
         [FromRoute] Guid id,
@@ -77,6 +81,7 @@ public class ServicesController : ControllerBase
     /// <summary>
     /// Kích hoạt hoặc vô hiệu hóa dịch vụ (Chỉ Quản trị viên)
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpPatch("{id:guid}/status")]
     public async Task<ActionResult<ServiceResponseDto>> SetStatus(
         [FromRoute] Guid id,
@@ -90,6 +95,7 @@ public class ServicesController : ControllerBase
     /// <summary>
     /// Vô hiệu hóa dịch vụ (Soft Delete / Deactivate - Chỉ Quản trị viên)
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:guid}")]
     public async Task<ActionResult<ServiceResponseDto>> Delete(
         [FromRoute] Guid id,

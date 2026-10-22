@@ -432,7 +432,6 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.ServiceRadiusKm)
                 .HasDefaultValue(10)
                 .HasColumnName("service_radius_km");
-            entity.Property(e => e.Status).HasColumnName("status");
             entity.Property(e => e.PractitionerType)
                 .HasDefaultValue(1)
                 .HasColumnName("practitioner_type");
@@ -495,6 +494,8 @@ public partial class CareLinkDbContext : DbContext
             entity.ToTable("nurse_unavailabilities");
 
             entity.HasIndex(e => new { e.NurseId, e.Date }, "uq_nurse_unavailability_date").IsUnique();
+            entity.HasIndex(e => e.NurseId, "idx_nurse_unavailabilities_nurse");
+            entity.HasIndex(e => e.Date, "idx_nurse_unavailabilities_date");
 
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -502,6 +503,7 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.NurseId).HasColumnName("nurse_id");
             entity.Property(e => e.Date).HasColumnName("date");
             entity.Property(e => e.Reason)
+                .HasMaxLength(255)
                 .HasColumnType("character varying")
                 .HasColumnName("reason");
             entity.Property(e => e.CreatedAt)

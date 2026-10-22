@@ -39,6 +39,7 @@ public class PaymentService(
     public async Task<DTOs.Payments.CreatePaymentLinkResponse> CreatePaymentLinkAsync(
         Guid userId,
         Guid bookingId,
+        decimal? customAmount = null,
         string? clientReturnUrl = null,
         string? clientCancelUrl = null,
         CancellationToken cancellationToken = default)
@@ -74,8 +75,29 @@ public class PaymentService(
         var resolvedReturnUrl = baseReturnUrl.Contains('?') ? $"{baseReturnUrl}&bookingId={booking.Id}" : $"{baseReturnUrl}?bookingId={booking.Id}";
         var resolvedCancelUrl = baseCancelUrl.Contains('?') ? $"{baseCancelUrl}&bookingId={booking.Id}" : $"{baseCancelUrl}?bookingId={booking.Id}";
 
+        // Determine charge amount: prioritize amount requested by FE
+        decimal chargeAmount;
+        if (customAmount.HasValue && customAmount.Value > 0)
+        {
+            chargeAmount = customAmount.Value;
+        }
+        else if (booking.TotalPrice > 0)
+        {
+            chargeAmount = booking.TotalPrice;
+        }
+        else
+        {
+            chargeAmount = _payOs.PlatformFeePerBooking > 0 ? _payOs.PlatformFeePerBooking : 60_000m;
+        }
+
+        if (chargeAmount < 1000m)
+        {
+            throw new BadRequestException("Số tiền thanh toán qua PayOS tối thiểu là 1.000 VNĐ.");
+        }
+
         // Reuse a still-valid link instead of creating duplicates at the gateway,
-        // EXCEPT if the old link was bound to carelink.vn but the client explicitly requested localhost or another origin.
+        // EXCEPT if the old link was bound to carelink.vn but the client explicitly requested localhost or another origin,
+        // or if the requested amount changed.
         if (payment is { Status: (int)PaymentStatus.Pending, CheckoutUrl: not null }
             && long.TryParse(payment.PaymentCode, out var existingCode))
         {
@@ -96,7 +118,7 @@ public class PaymentService(
                 }
             }
 
-            if (!hostMismatch)
+            if (!hostMismatch && payment.Amount == chargeAmount)
             {
                 return new DTOs.Payments.CreatePaymentLinkResponse
                 {
@@ -115,7 +137,6 @@ public class PaymentService(
         }
 
         var orderCode = GenerateOrderCode();
-        var amount = booking.TotalPrice;
 
         GatewayLinkResponse link;
         try
@@ -124,7 +145,7 @@ public class PaymentService(
             link = await client.PaymentRequests.CreateAsync(new CreatePaymentLinkRequest
             {
                 OrderCode = orderCode,
-                Amount = (long)decimal.Round(amount, 0, MidpointRounding.AwayFromZero),
+                Amount = (long)decimal.Round(chargeAmount, 0, MidpointRounding.AwayFromZero),
                 // PayOS limits the description to 25 characters.
                 Description = $"CL {booking.Id.ToString("N")[..8].ToUpperInvariant()}",
                 ReturnUrl = resolvedReturnUrl,
@@ -136,27 +157,17 @@ public class PaymentService(
                 [
                     new PaymentLinkItem
                     {
-                        Name = booking.Service.ServiceName.Length > 50 ? booking.Service.ServiceName[..50] : booking.Service.ServiceName,
+                        Name = $"Thanh toán: {booking.Service.ServiceName}"[..Math.Min(50, $"Thanh toán: {booking.Service.ServiceName}".Length)],
                         Quantity = 1,
-                        Price = (long)decimal.Round(amount, 0, MidpointRounding.AwayFromZero)
+                        Price = (long)decimal.Round(chargeAmount, 0, MidpointRounding.AwayFromZero)
                     }
                 ]
             });
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "PayOS create payment link failed for booking {BookingId}. Falling back to sandbox payment link.", booking.Id);
-            var returnUrl = resolvedReturnUrl.Contains('?')
-                ? $"{resolvedReturnUrl}&orderCode={orderCode}&status=PAID&code=00"
-                : $"{resolvedReturnUrl}?orderCode={orderCode}&status=PAID&code=00";
-
-            link = new GatewayLinkResponse
-            {
-                OrderCode = orderCode,
-                CheckoutUrl = returnUrl,
-                PaymentLinkId = $"sandbox_{orderCode}",
-                QrCode = string.Empty
-            };
+            logger.LogError(ex, "PayOS create payment link failed for booking {BookingId}.", booking.Id);
+            throw new BusinessRuleException("Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại sau.");
         }
 
         var now = DateTime.UtcNow;
@@ -171,8 +182,8 @@ public class PaymentService(
             await payments.AddAsync(payment, cancellationToken);
         }
 
-        payment.Amount = amount;
-        payment.PlatformFee = Math.Min(_payOs.PlatformFeePerBooking, amount);
+        payment.Amount = chargeAmount;
+        payment.PlatformFee = chargeAmount;
         payment.PaymentMethod = (int)PaymentMethod.PayOS;
         payment.Status = (int)PaymentStatus.Pending;
         payment.PaymentCode = orderCode.ToString(CultureInfo.InvariantCulture);
@@ -186,7 +197,7 @@ public class PaymentService(
             PaymentId = payment.Id,
             BookingId = booking.Id,
             OrderCode = orderCode,
-            Amount = amount,
+            Amount = chargeAmount,
             CheckoutUrl = link.CheckoutUrl,
             QrCode = link.QrCode
         };
@@ -311,12 +322,51 @@ public class PaymentService(
 
         if (booking.Status == (int)BookingStatus.PendingPayment)
         {
+            // Check late conflict before confirming/activating slot
+            var pendingPaymentCutoff = now.AddMinutes(-_booking.PendingPaymentHoldMinutes);
+            var busy = await bookings.GetBusyNurseIdsAsync(
+                booking.ScheduledStart,
+                booking.ScheduledEnd,
+                pendingPaymentCutoff,
+                [booking.NurseId],
+                cancellationToken);
+
+            if (busy.Contains(booking.NurseId))
+            {
+                booking.Status = (int)BookingStatus.Canceled;
+                booking.CancelReason = "Bị trùng lịch do thanh toán muộn (Slot đã được xác nhận cho ca khác)";
+                booking.CanceledBy = (int)CanceledBy.System;
+                booking.CanceledAt = now;
+
+                logger.LogWarning("Payment received for Booking {BookingId} but slot is now busy. Marked CanceledBySystem.", booking.Id);
+
+                await NotifyAsync(
+                    booking.Customer.UserId,
+                    "Ca chăm sóc bị hủy do trùng lịch",
+                    $"Bạn đã thanh toán phí sàn nhưng lịch hẹn lúc {FormatTime(booking.ScheduledStart)} đã bị trùng do quá thời hạn giữ chỗ. Vui lòng liên hệ hỗ trợ hoặc chọn ca khác.",
+                    NotificationTypes.BookingCanceled,
+                    booking.Id,
+                    cancellationToken);
+                return;
+            }
+
             // Check if this booking was created from an accepted proposal
             var proposal = await conversations.GetProposalByBookingIdAsync(booking.Id, asNoTracking: false, cancellationToken);
 
             var isProposalBooking = proposal != null
                 && proposal.ConversationId == booking.ConversationId
                 && proposal.Status == (int)ProposalStatus.Accepted;
+
+            var remainingToNurse = Math.Max(0, booking.TotalPrice - payment.Amount);
+            var remainingChatNote = remainingToNurse > 0
+                ? $" Tiền công dịch vụ còn lại {Money(remainingToNurse)} gia đình sẽ thanh toán trực tiếp cho Điều dưỡng."
+                : string.Empty;
+            var remainingCustomerNote = remainingToNurse > 0
+                ? $" Tiền công dịch vụ còn lại {Money(remainingToNurse)} quý khách vui lòng thanh toán trực tiếp cho Điều dưỡng."
+                : string.Empty;
+            var remainingNurseNote = remainingToNurse > 0
+                ? $" Tiền công còn lại {Money(remainingToNurse)} do khách thanh toán trực tiếp cho bạn khi hoàn thành ca."
+                : string.Empty;
 
             if (isProposalBooking)
             {
@@ -336,7 +386,7 @@ public class PaymentService(
                     Id = Guid.NewGuid(),
                     ConversationId = proposal.ConversationId,
                     SenderUserId = booking.Customer.UserId,
-                    Content = $"Gia đình đã thanh toán thành công {Money(payment.Amount)} qua PayOS. Lịch chăm sóc đã được xác nhận.",
+                    Content = $"Gia đình đã thanh toán {Money(payment.Amount)} qua PayOS. Lịch chăm sóc đã được xác nhận.{remainingChatNote}",
                     Type = (int)MessageType.SystemNotification,
                     ProposalId = proposal.Id,
                     BookingId = booking.Id,
@@ -354,7 +404,7 @@ public class PaymentService(
                 await NotifyAsync(
                     booking.Customer.UserId,
                     "Thanh toán thành công - Lịch hẹn đã xác nhận",
-                    $"Bạn đã thanh toán {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Lịch chăm sóc đã được xác nhận.",
+                    $"Bạn đã thanh toán thành công {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Lịch chăm sóc đã được xác nhận.{remainingCustomerNote}",
                     NotificationTypes.PaymentSucceeded,
                     booking.Id,
                     cancellationToken);
@@ -362,7 +412,7 @@ public class PaymentService(
                 await NotifyAsync(
                     booking.Nurse.UserId,
                     "Lịch hẹn đã được xác nhận",
-                    $"Khách hàng đã hoàn tất thanh toán cho đề xuất #{proposal.ProposalNumber} lúc {FormatTime(booking.ScheduledStart)}. Ca chăm sóc đã được xác nhận.",
+                    $"Khách hàng đã thanh toán {Money(payment.Amount)} qua PayOS cho đề xuất #{proposal.ProposalNumber} lúc {FormatTime(booking.ScheduledStart)}. Ca chăm sóc đã được xác nhận.{remainingNurseNote}",
                     NotificationTypes.BookingAccepted,
                     booking.Id,
                     cancellationToken);
@@ -382,8 +432,7 @@ public class PaymentService(
                 await NotifyAsync(
                     booking.Customer.UserId,
                     "Thanh toán thành công",
-                    $"Bạn đã thanh toán {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. " +
-                    "Đang chờ điều dưỡng xác nhận.",
+                    $"Bạn đã thanh toán thành công {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Đang chờ điều dưỡng xác nhận.{remainingCustomerNote}",
                     NotificationTypes.PaymentSucceeded,
                     booking.Id,
                     cancellationToken);
@@ -391,8 +440,7 @@ public class PaymentService(
                 await NotifyAsync(
                     booking.Nurse.UserId,
                     "Bạn có lịch hẹn mới",
-                    $"Có yêu cầu chăm sóc mới lúc {FormatTime(booking.ScheduledStart)}. " +
-                    $"Vui lòng phản hồi trong {_booking.NurseAcceptTimeoutMinutes} phút.",
+                    $"Có yêu cầu chăm sóc mới lúc {FormatTime(booking.ScheduledStart)}. Khách hàng đã thanh toán {Money(payment.Amount)} qua PayOS. Vui lòng phản hồi trong {_booking.NurseAcceptTimeoutMinutes} phút.{remainingNurseNote}",
                     NotificationTypes.BookingNewRequest,
                     booking.Id,
                     cancellationToken);
@@ -401,14 +449,13 @@ public class PaymentService(
         else
         {
             // Payment arrived after the booking was already canceled (e.g. timeout expired or manual cancellation).
-            logger.LogWarning("Payment for already CANCELED booking {BookingId}. Payment recorded as Paid, pending manual refund.",
+            logger.LogWarning("Payment for already CANCELED booking {BookingId}. Payment recorded as Paid.",
                 booking.Id);
 
             await NotifyAsync(
                 booking.Customer.UserId,
                 "Thanh toán sau khi ca đã hủy",
-                $"Giao dịch {Money(payment.Amount)} của bạn đã được ghi nhận nhưng ca chăm sóc đã bị hủy. " +
-                "Bộ phận CSKH sẽ liên hệ hoàn tiền cho bạn.",
+                $"Giao dịch {Money(payment.Amount)} của bạn đã được ghi nhận nhưng ca chăm sóc đã bị hủy do hết hạn giữ chỗ. Vui lòng liên hệ bộ phận hỗ trợ.",
                 NotificationTypes.PaymentRefunded,
                 booking.Id,
                 cancellationToken);

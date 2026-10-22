@@ -22,5 +22,5 @@ public interface INurseProfileService
 
     Task<NurseUnavailabilityResponse> AddNurseUnavailabilityAsync(Guid userId, CreateNurseUnavailabilityRequest request, CancellationToken cancellationToken = default);
 
-    Task DeleteNurseUnavailabilityAsync(Guid userId, Guid unavailabilityId, CancellationToken cancellationToken = default);
+    Task DeleteNurseUnavailabilityAsync(Guid userId, Guid id, CancellationToken cancellationToken = default);
 }

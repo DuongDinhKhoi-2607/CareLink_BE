@@ -40,26 +40,22 @@ public class NurseSearchService(
 
         var candidates = await nurses.SearchActiveAsync(request.District, request.MinRating, cancellationToken);
 
-        // Filter 1: Only nurses currently accepting bookings (Luồng 2)
+        // Filter 1: Only nurses currently accepting bookings (Luồng 2 & 3)
         candidates = candidates.Where(n => n.IsAcceptingBookings).ToList();
 
-        // Filter 2: Clinical services requiring a license can only be done by Graduate Nurses (Luồng 1)
+        // Filter 2: Clinical services requiring a license can only be done by Graduate Nurses with valid license (Luồng 1 & 3)
         if (service != null && service.RequiresLicense)
         {
-            candidates = candidates.Where(n => n.PractitionerType != (int)NursePractitionerType.MedicalStudent).ToList();
+            candidates = candidates.Where(n =>
+                n.PractitionerType != (int)NursePractitionerType.MedicalStudent
+                && !string.IsNullOrWhiteSpace(n.LicenseNumber)
+                && (n.EducationLevel == null || !n.EducationLevel.ToLower().Contains("sinh viên"))
+            ).ToList();
         }
 
-        // Filter 3: Blackout dates & Availability slots & Overlapping bookings (Luồng 2)
+        // Filter 3: Blackout dates & Availability slots & Overlapping bookings (Luồng 2 & 3)
         if (window is not null && candidates.Count > 0)
         {
-            var localDate = DateOnly.FromDateTime(VietnamTime.ToLocal(window.Value.StartUtc));
-            var candidateIds = candidates.Select(n => n.Id).ToList();
-            var blockedIds = await unavailabilities.GetBlockedNurseIdsOnDateAsync(localDate, candidateIds, cancellationToken);
-            if (blockedIds.Count > 0)
-            {
-                candidates = candidates.Where(n => !blockedIds.Contains(n.Id)).ToList();
-            }
-
             candidates = await ExcludeUnavailableAsync(candidates, window.Value, cancellationToken);
         }
 
@@ -93,7 +89,7 @@ public class NurseSearchService(
     }
 
     /// <summary>
-    /// Works out the requested [start, end) window in UTC. Returns null when the caller did not ask for a slot.
+    /// Works out the requested [start, end) window in UTC.
     /// </summary>
     private static (DateTime StartUtc, DateTime EndUtc)? ResolveTimeWindow(
         NurseSearchRequest request,
@@ -138,7 +134,7 @@ public class NurseSearchService(
         return (startUtc, endUtc);
     }
 
-    /// <summary>Search-03: keep nurses that configured a covering availability and have no overlapping booking.</summary>
+    /// <summary>Search-03: keep nurses that configured a covering availability, have no blackout date, and no overlapping booking.</summary>
     private async Task<List<Nurse>> ExcludeUnavailableAsync(
         List<Nurse> candidates,
         (DateTime StartUtc, DateTime EndUtc) window,
@@ -153,6 +149,12 @@ public class NurseSearchService(
             candidateIds,
             cancellationToken);
 
+        var localDate = DateOnly.FromDateTime(VietnamTime.ToLocal(window.StartUtc));
+        var blackoutNurseIds = await unavailabilities.GetBlackoutNurseIdsAsync(
+            localDate,
+            candidateIds,
+            cancellationToken);
+
         var pendingPaymentCutoff = DateTime.UtcNow.AddMinutes(-options.Value.PendingPaymentHoldMinutes);
         var busy = await bookings.GetBusyNurseIdsAsync(
             window.StartUtc,
@@ -161,7 +163,11 @@ public class NurseSearchService(
             candidateIds,
             cancellationToken);
 
-        return candidates.Where(n => available.Contains(n.Id) && !busy.Contains(n.Id)).ToList();
+        return candidates
+            .Where(n => available.Contains(n.Id)
+                        && !blackoutNurseIds.Contains(n.Id)
+                        && !busy.Contains(n.Id))
+            .ToList();
     }
 
     /// <summary>Search-02: Haversine distance; nearest first, then best rated.</summary>
