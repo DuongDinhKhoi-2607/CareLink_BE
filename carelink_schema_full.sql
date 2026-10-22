@@ -136,8 +136,8 @@ CREATE TABLE public.nurse_documents (
     id              UUID        NOT NULL DEFAULT gen_random_uuid(),
     nurse_id        UUID        NOT NULL,
     document_type   INTEGER     NOT NULL
-                    CHECK (document_type IN (1, 2, 3, 4, 5)),
-                    -- 1=CCCD_FRONT | 2=CCCD_BACK | 3=DEGREE | 4=LICENSE | 5=SELFIE
+                    CHECK (document_type IN (1, 2, 3, 4, 5, 6)),
+                    -- 1=CCCD_FRONT | 2=CCCD_BACK | 3=DEGREE | 4=LICENSE | 5=SELFIE | 6=STUDENT_CARD
     file_url        TEXT        NOT NULL,
     status          INTEGER     NOT NULL DEFAULT 0
                     CHECK (status IN (0, 1, 2)),
@@ -184,6 +184,28 @@ CREATE TABLE public.services (
     CONSTRAINT services_pkey    PRIMARY KEY (id)
 );
 
+-- ============================================================
+-- MODULE 5: TWO-WAY CHAT & BOOKING PROPOSALS
+-- ============================================================
+
+-- 1. Cuộc hội thoại duy nhất lâu dài giữa Family và Caregiver
+CREATE TABLE public.conversations (
+    id                  UUID        NOT NULL DEFAULT gen_random_uuid(),
+    customer_id         UUID        NOT NULL,
+    nurse_id            UUID        NOT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_message_at     TIMESTAMPTZ,
+    CONSTRAINT conversations_pkey           PRIMARY KEY (id),
+    CONSTRAINT uq_conversations_customer_nurse UNIQUE (customer_id, nurse_id),
+    CONSTRAINT fk_conversation_customer     FOREIGN KEY (customer_id) REFERENCES public.customers(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_conversation_nurse        FOREIGN KEY (nurse_id) REFERENCES public.nurses(id) ON DELETE RESTRICT
+);
+
+-- ============================================================
+-- MODULE 6: BOOKINGS & STATE MACHINE
+-- ============================================================
+
 -- Module 6: Booking với State Machine đầy đủ
 CREATE TABLE public.bookings (
     id              UUID        NOT NULL DEFAULT gen_random_uuid(),
@@ -213,11 +235,69 @@ CREATE TABLE public.bookings (
     completed_at    TIMESTAMPTZ,
     canceled_at     TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    conversation_id UUID,
     CONSTRAINT bookings_pkey            PRIMARY KEY (id),
     CONSTRAINT fk_booking_customer      FOREIGN KEY (customer_id) REFERENCES public.customers(id),
     CONSTRAINT fk_booking_nurse         FOREIGN KEY (nurse_id) REFERENCES public.nurses(id),
     CONSTRAINT fk_booking_recipient     FOREIGN KEY (recipient_id) REFERENCES public.care_recipients(id),
-    CONSTRAINT fk_booking_service       FOREIGN KEY (service_id) REFERENCES public.services(id)
+    CONSTRAINT fk_booking_service       FOREIGN KEY (service_id) REFERENCES public.services(id),
+    CONSTRAINT fk_booking_conversation  FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE SET NULL
+);
+
+-- 2. Lịch sử các phiên bản đề xuất ca làm trong hội thoại (Negotiation Proposals)
+-- Trạng thái status: 1=Pending | 2=Accepted | 3=Rejected | 4=Superseded | 5=Expired | 6=BookedAndPaid
+CREATE TABLE public.booking_proposals (
+    id                  UUID        NOT NULL DEFAULT gen_random_uuid(),
+    conversation_id     UUID        NOT NULL,
+    proposal_number     INTEGER     NOT NULL DEFAULT 1,
+    sender_user_id      UUID        NOT NULL,
+    service_id          UUID        NOT NULL,
+    recipient_id        UUID        NOT NULL,
+    address_id          UUID,
+    address_snapshot    VARCHAR     NOT NULL,
+    latitude_snapshot   NUMERIC(10, 7),
+    longitude_snapshot  NUMERIC(10, 7),
+    scheduled_start     TIMESTAMPTZ NOT NULL,
+    scheduled_end       TIMESTAMPTZ NOT NULL,
+    total_price         NUMERIC     NOT NULL CHECK (total_price >= 0),
+    notes               TEXT,
+    status              INTEGER     NOT NULL DEFAULT 1 CHECK (status IN (1, 2, 3, 4, 5, 6)),
+    response_note       TEXT,
+    responded_at        TIMESTAMPTZ,
+    booking_id          UUID,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT booking_proposals_pkey       PRIMARY KEY (id),
+    CONSTRAINT uq_proposals_conv_number     UNIQUE (conversation_id, proposal_number),
+    CONSTRAINT fk_proposal_conversation     FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_proposal_sender_user      FOREIGN KEY (sender_user_id) REFERENCES public.users(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_proposal_service          FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_proposal_recipient        FOREIGN KEY (recipient_id) REFERENCES public.care_recipients(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_proposal_address          FOREIGN KEY (address_id) REFERENCES public.addresses(id) ON DELETE SET NULL,
+    CONSTRAINT fk_proposal_booking          FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE SET NULL
+);
+
+-- Ràng buộc 1-1 giữa Proposal và Booking:
+CREATE UNIQUE INDEX IF NOT EXISTS uq_proposals_booking_id 
+ON public.booking_proposals(booking_id) 
+WHERE booking_id IS NOT NULL;
+
+-- 3. Bảng tin nhắn thời gian thực trong hội thoại (Chat Timeline)
+-- Loại type: 1=Text | 2=ProposalCard | 3=ProposalResponse | 4=SystemNotification
+CREATE TABLE public.messages (
+    id                  UUID        NOT NULL DEFAULT gen_random_uuid(),
+    conversation_id     UUID        NOT NULL,
+    sender_user_id      UUID        NOT NULL,
+    content             TEXT        NOT NULL,
+    type                INTEGER     NOT NULL DEFAULT 1 CHECK (type IN (1, 2, 3, 4)),
+    proposal_id         UUID,
+    booking_id          UUID,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT messages_pkey            PRIMARY KEY (id),
+    CONSTRAINT fk_message_conversation  FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_message_sender_user   FOREIGN KEY (sender_user_id) REFERENCES public.users(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_message_proposal      FOREIGN KEY (proposal_id) REFERENCES public.booking_proposals(id) ON DELETE SET NULL,
+    CONSTRAINT fk_message_booking       FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE SET NULL
 );
 
 -- ============================================================
@@ -405,8 +485,49 @@ CREATE TABLE public.notifications (
 );
 
 -- ============================================================
+-- MODULE 8: MEDICAL HANDBOOK (CẨM NANG Y TẾ)
+-- ============================================================
+
+CREATE TABLE public.handbook_articles (
+    id                  UUID        NOT NULL DEFAULT gen_random_uuid(),
+    title               VARCHAR     NOT NULL,
+    slug                VARCHAR     NOT NULL,
+    category            VARCHAR     NOT NULL,
+    category_name       VARCHAR     NOT NULL,
+    summary             TEXT        NOT NULL,
+    content             TEXT        NOT NULL,
+    read_time           VARCHAR     DEFAULT '5 phút đọc',
+    source              VARCHAR     DEFAULT 'Vinmec',
+    source_detail       VARCHAR,
+    image_url           TEXT,
+    featured            BOOLEAN     NOT NULL DEFAULT false,
+    status              VARCHAR     NOT NULL DEFAULT 'published'
+                        CHECK (status IN ('published', 'draft', 'archived')),
+    "references"        JSONB       DEFAULT '[]',
+    author_id           UUID,
+    published_at        TIMESTAMPTZ DEFAULT now(),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT handbook_articles_pkey PRIMARY KEY (id),
+    CONSTRAINT handbook_articles_slug_unique UNIQUE (slug),
+    CONSTRAINT fk_handbook_author FOREIGN KEY (author_id) REFERENCES public.users(id) ON DELETE SET NULL
+);
+
+-- ============================================================
 -- INDEXES (Tăng hiệu năng query)
 -- ============================================================
+
+-- Chat & Proposals
+CREATE INDEX idx_conversations_customer ON public.conversations(customer_id);
+CREATE INDEX idx_conversations_nurse ON public.conversations(nurse_id);
+CREATE INDEX idx_proposals_conversation_status ON public.booking_proposals(conversation_id, status);
+CREATE INDEX idx_messages_conversation_created ON public.messages(conversation_id, created_at ASC);
+CREATE INDEX idx_bookings_conversation_id ON public.bookings(conversation_id);
+
+-- Handbook
+CREATE INDEX idx_handbook_slug ON public.handbook_articles(slug);
+CREATE INDEX idx_handbook_category ON public.handbook_articles(category);
+CREATE INDEX idx_handbook_status ON public.handbook_articles(status);
 
 -- Auth
 CREATE INDEX idx_users_email ON public.users(email);
