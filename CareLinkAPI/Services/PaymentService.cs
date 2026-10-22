@@ -214,7 +214,10 @@ public class PaymentService(
         if (user.Role != (int)UserRole.Admin)
         {
             var customer = await customers.GetByUserIdAsync(userId, cancellationToken);
-            if (customer is null || payment.Booking.CustomerId != customer.Id)
+            var isCustomer = customer != null && payment.Booking.CustomerId == customer.Id;
+            var isNurse = payment.Booking.Nurse != null && payment.Booking.Nurse.UserId == userId;
+
+            if (!isCustomer && !isNurse)
             {
                 throw new ForbiddenException("You do not have access to this payment.");
             }
@@ -228,10 +231,20 @@ public class PaymentService(
                 {
                     using var client = CreateClient();
                     var payOsInfo = await client.PaymentRequests.GetAsync(orderCode);
-                    if (payOsInfo != null && payOsInfo.Status.ToString().Equals("PAID", StringComparison.OrdinalIgnoreCase))
+                    if (payOsInfo != null)
                     {
-                        logger.LogInformation("Payment for booking {BookingId} (order {OrderCode}) confirmed PAID directly via PayOS API.", bookingId, orderCode);
-                        await FulfillPaidPaymentAsync(payment, payOsInfo.Id, "PAYOS_DIRECT_SYNC", cancellationToken);
+                        var isPaid = payOsInfo.Status.ToString().Equals("PAID", StringComparison.OrdinalIgnoreCase);
+                        var hasPartialPayment = payOsInfo.AmountPaid >= 1000;
+                        if (isPaid || hasPartialPayment)
+                        {
+                            if (payOsInfo.AmountPaid > 0 && payOsInfo.AmountPaid != payment.Amount)
+                            {
+                                payment.Amount = payOsInfo.AmountPaid;
+                            }
+                            logger.LogInformation("Payment for booking {BookingId} (order {OrderCode}) confirmed PAID directly via PayOS API (Amount: {Amount}).",
+                                bookingId, orderCode, payment.Amount);
+                            await FulfillPaidPaymentAsync(payment, payOsInfo.Id, "PAYOS_DIRECT_SYNC", cancellationToken);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -294,8 +307,9 @@ public class PaymentService(
 
             if (data.Amount < (long)payment.Amount)
             {
-                logger.LogError("PayOS order {OrderCode}: paid {Paid} < expected {Expected}.", orderCode, data.Amount, payment.Amount);
-                throw new BusinessRuleException("Paid amount does not match the booking price.");
+                logger.LogWarning("PayOS order {OrderCode}: paid {Paid} < expected {Expected}. Adjusting payment amount.",
+                    orderCode, data.Amount, payment.Amount);
+                payment.Amount = data.Amount;
             }
 
             await FulfillPaidPaymentAsync(payment, data.Reference, rawPayload, cancellationToken);

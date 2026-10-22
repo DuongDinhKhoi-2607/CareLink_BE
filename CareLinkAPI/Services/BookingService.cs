@@ -603,7 +603,7 @@ public class BookingService(
 
             case UserRole.Nurse when booking.NurseId == actor.NurseId:
                 // The nurse only learns about a request once it has been paid.
-                if ((BookingStatus)booking.Status == BookingStatus.PendingPayment)
+                if ((BookingStatus)booking.Status == BookingStatus.PendingPayment && booking.Payment?.Status != (int)PaymentStatus.Paid)
                 {
                     throw new NotFoundException("Booking not found.");
                 }
