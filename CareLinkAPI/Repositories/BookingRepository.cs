@@ -79,11 +79,15 @@ public class BookingRepository(CareLinkDbContext db) : IBookingRepository
         var lockingStatuses = BookingStateMachine.SlotLockingStatuses;
         var pendingPayment = (int)BookingStatus.PendingPayment;
 
+        // Travel buffer: 30 minutes before and after ca
+        var bufferedStartUtc = startUtc.AddMinutes(-30);
+        var bufferedEndUtc = endUtc.AddMinutes(30);
+
         var ids = await db.Bookings
             .AsNoTracking()
             .Where(b => candidateNurseIds.Contains(b.NurseId)
-                        && b.ScheduledStart < endUtc
-                        && b.ScheduledEnd > startUtc
+                        && b.ScheduledStart < bufferedEndUtc
+                        && b.ScheduledEnd > bufferedStartUtc
                         && (lockingStatuses.Contains(b.Status)
                             || (b.Status == pendingPayment && b.CreatedAt >= pendingPaymentCutoffUtc)))
             .Select(b => b.NurseId)

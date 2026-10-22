@@ -57,6 +57,7 @@ public class ServiceCatalogService : IServiceCatalogService
             RequiredSkills = dto.RequiredSkills?.Trim(),
             BasePrice = dto.BasePrice,
             DurationMinutes = dto.DurationMinutes,
+            RequiresLicense = dto.RequiresLicense,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
@@ -80,6 +81,7 @@ public class ServiceCatalogService : IServiceCatalogService
         entity.RequiredSkills = dto.RequiredSkills?.Trim();
         entity.BasePrice = dto.BasePrice;
         entity.DurationMinutes = dto.DurationMinutes;
+        entity.RequiresLicense = dto.RequiresLicense;
 
         await _serviceRepository.UpdateAsync(entity, ct);
         return MapToResponseDto(entity);
@@ -104,6 +106,7 @@ public class ServiceCatalogService : IServiceCatalogService
         BasePrice = s.BasePrice,
         DurationMinutes = s.DurationMinutes,
         IsActive = s.IsActive,
+        RequiresLicense = s.RequiresLicense,
         CreatedAt = s.CreatedAt
     };
 }

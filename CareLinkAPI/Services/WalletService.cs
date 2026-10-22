@@ -38,25 +38,9 @@ public class WalletService(
             return;
         }
 
-        var fee = Math.Min(Math.Max(platformFee, 0m), totalPrice);
-        var earning = totalPrice - fee;
         var now = DateTime.UtcNow;
 
-        // Platform fee is recorded for transparency (amount 0 on the nurse's balance – it was never theirs).
-        await wallets.AddTransactionAsync(new WalletTransaction
-        {
-            Id = Guid.NewGuid(),
-            WalletId = wallet.Id,
-            BookingId = bookingId,
-            Type = (int)WalletTransactionType.PlatformFee,
-            Amount = -fee,
-            BalanceAfter = wallet.Balance,
-            Description = $"Phí sàn {Money(fee)} cho ca chăm sóc",
-            CreatedAt = now
-        }, cancellationToken);
-
-        wallet.Balance += earning;
-        wallet.TotalEarned += earning;
+        wallet.TotalEarned += totalPrice;
         wallet.UpdatedAt = now;
 
         await wallets.AddTransactionAsync(new WalletTransaction
@@ -65,9 +49,9 @@ public class WalletService(
             WalletId = wallet.Id,
             BookingId = bookingId,
             Type = (int)WalletTransactionType.BookingEarning,
-            Amount = earning,
+            Amount = totalPrice,
             BalanceAfter = wallet.Balance,
-            Description = $"Doanh thu ca chăm sóc ({Money(totalPrice)} - phí sàn {Money(fee)})",
+            Description = $"Doanh thu ca chăm sóc (Khách thanh toán trực tiếp {Money(totalPrice)})",
             CreatedAt = now
         }, cancellationToken);
 
@@ -76,8 +60,8 @@ public class WalletService(
         {
             await NotifyAsync(
                 nurse.UserId,
-                "Ví đã được cộng tiền",
-                $"Bạn nhận được {Money(earning)} từ ca chăm sóc vừa hoàn thành. Số dư hiện tại: {Money(wallet.Balance)}.",
+                "Ca chăm sóc hoàn tất",
+                $"Bạn đã hoàn thành ca chăm sóc. Tiền công {Money(totalPrice)} do khách thanh toán trực tiếp cho bạn. Tổng thu nhập tích luỹ: {Money(wallet.TotalEarned)}.",
                 NotificationTypes.WalletCredited,
                 bookingId,
                 cancellationToken);

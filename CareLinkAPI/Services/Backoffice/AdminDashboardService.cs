@@ -32,7 +32,7 @@ public class AdminDashboardService : IAdminDashboardService
         _disputeRepository = disputeRepository;
         _bookingQueryService = bookingQueryService;
         _currentUserService = currentUserService;
-        _platformFeePerBooking = payOsOptions.Value.PlatformFeePerBooking;
+        _platformFeePerBooking = payOsOptions.Value.PlatformFeePerBooking > 0 ? payOsOptions.Value.PlatformFeePerBooking : 60_000m;
     }
 
     public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken ct = default)

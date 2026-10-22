@@ -25,7 +25,7 @@ public class NurseRepository(CareLinkDbContext db) : INurseRepository
     {
         var query = db.Nurses
             .AsNoTracking()
-            .Where(n => n.Status == (int)NurseStatus.Active);
+            .Where(n => n.Status == (int)NurseStatus.Active && n.IsAcceptingBookings);
 
         if (!string.IsNullOrWhiteSpace(district))
         {

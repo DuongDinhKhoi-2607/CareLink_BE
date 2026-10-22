@@ -1,12 +1,14 @@
 using CareLinkAPI.Common.Models;
 using CareLinkAPI.DTOs.Wallet;
 using CareLinkAPI.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CareLinkAPI.Controllers.Backoffice;
 
 /// <summary>Pay-05: admin reviews nurse payout requests.</summary>
 [ApiController]
+[Authorize(Roles = "Admin")]
 [Route("api/v1/admin/payouts")]
 [Produces("application/json")]
 public class PayoutsController(IWalletService walletService) : ControllerBase

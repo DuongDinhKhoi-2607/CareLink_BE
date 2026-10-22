@@ -7,6 +7,7 @@ namespace CareLinkAPI.Controllers.Backoffice;
 
 [Authorize(Roles = "Admin")]
 [ApiController]
+[Authorize(Roles = "Admin")]
 [Route("api/v1/admin/dashboard")]
 public class AdminDashboardController : ControllerBase
 {

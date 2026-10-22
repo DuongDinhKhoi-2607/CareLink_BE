@@ -117,6 +117,7 @@ public class NurseProfileController(
     /// Luồng 2: Lấy danh sách các ngày bận/nghỉ đột xuất của điều dưỡng.
     /// </summary>
     [HttpGet("unavailability")]
+    [HttpGet("unavailabilities")]
     [ProducesResponseType(typeof(List<NurseUnavailabilityResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<NurseUnavailabilityResponse>>> GetUnavailability(CancellationToken cancellationToken)
     {
@@ -128,6 +129,7 @@ public class NurseProfileController(
     /// Luồng 2: Đăng ký một ngày bận/nghỉ đột xuất (Blackout Date). Trong ngày này, khách hàng không thể tìm kiếm hay đặt lịch với điều dưỡng.
     /// </summary>
     [HttpPost("unavailability")]
+    [HttpPost("unavailabilities")]
     [ProducesResponseType(typeof(NurseUnavailabilityResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -143,12 +145,27 @@ public class NurseProfileController(
     /// Luồng 2: Huỷ đăng ký ngày bận/nghỉ theo ID.
     /// </summary>
     [HttpDelete("unavailability/{id:guid}")]
+    [HttpDelete("unavailabilities/{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUnavailability(Guid id, CancellationToken cancellationToken)
     {
         await nurseProfileService.DeleteNurseUnavailabilityAsync(this.GetCurrentUserId(), id, cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>
+    /// User-06b: Cập nhật trạng thái bật / tắt nhận ca mới của Điều dưỡng (Online/Offline).
+    /// </summary>
+    [HttpPut("accepting-bookings")]
+    [ProducesResponseType(typeof(NurseProfileResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<NurseProfileResponse>> SetAcceptingBookings(
+        [FromBody] UpdateAcceptingBookingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await nurseProfileService.SetAcceptingBookingsAsync(
+            this.GetCurrentUserId(), request.IsAcceptingBookings, cancellationToken);
+        return Ok(result);
     }
 
     // ─── VERIFICATION & DOCUMENTS (MODULE 3) ────────────────────────────────────
