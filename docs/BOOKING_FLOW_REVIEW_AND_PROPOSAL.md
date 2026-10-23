@@ -216,9 +216,90 @@ ALTER TABLE public.bookings
 
 ---
 
-## 6. XÁC NHẬN TRIỂN KHAI
+## 6. TÍNH NĂNG ADMIN: QUẢN LÝ THỐNG KÊ CA TRỰC & DOANH THU TỪNG ĐIỀU DƯỠNG (ADMIN NURSE PERFORMANCE & EARNINGS API)
 
-Toàn bộ tài liệu chi tiết phiên bản V2.1 đã được cập nhật hoàn chỉnh tại [`docs/BOOKING_FLOW_REVIEW_AND_PROPOSAL.md`](file:///d:/Documents/EXE1/CareLink_BE/docs/BOOKING_FLOW_REVIEW_AND_PROPOSAL.md).
+> **Mục tiêu:** Cung cấp cho Quản trị viên (Admin) góc nhìn chi tiết và minh bạch về hiệu suất làm việc và dòng tiền của **từng điều dưỡng riêng biệt** trên nền tảng CareLink: Biết chính xác điều dưỡng đó đã nhận bao nhiêu ca, hoàn thành bao nhiêu ca, tổng số tiền kiếm được, số dư ví hiện tại, và số tiền đã rút về ngân hàng.
+
+### 6.1. Chi tiết API Endpoint Admin
+
+#### 🔹 API 1: Danh sách thống kê ca trực & doanh thu của từng Điều dưỡng (Phân trang, Tìm kiếm, Lọc)
+- **Endpoint:** `GET /api/v1/admin/nurses/statistics`
+- **Quyền truy cập:** `[Authorize(Roles = "Admin")]`
+- **Query Parameters:**
+  - `search` (string?, tùy chọn): Tìm kiếm theo Họ và tên, Số điện thoại hoặc Email điều dưỡng.
+  - `district` (string?, tùy chọn): Lọc theo quận/huyện làm việc (ví dụ: "Quận 1", "Quận 7", "Thủ Đức").
+  - `fromDate` (DateTime?, tùy chọn): Lọc dữ liệu ca trực từ ngày.
+  - `toDate` (DateTime?, tùy chọn): Lọc dữ liệu ca trực đến ngày.
+  - `pageNumber` (int, mặc định `1`): Số trang.
+  - `pageSize` (int, mặc định `10`): Số lượng bản ghi trên một trang.
+- **Dữ liệu trả về (`PagedResult<AdminNurseStatisticDto>`):**
+  ```json
+  {
+    "items": [
+      {
+        "nurseId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "userId": "4fa85f64-5717-4562-b3fc-2c963f66afa7",
+        "fullName": "Nguyễn Thị Mai",
+        "phoneNumber": "0912345678",
+        "email": "mai.nguyen@gmail.com",
+        "avatarUrl": "https://carelink.vn/avatars/mai.jpg",
+        "workDistrict": "Quận 1, TP. Hồ Chí Minh",
+        "averageRating": 4.9,
+        "totalReviews": 28,
+        "isAcceptingBookings": true,
+        "bookingStats": {
+          "totalBookings": 35,
+          "completedBookings": 30,
+          "inProgressBookings": 2,
+          "pendingBookings": 1,
+          "canceledBookings": 2,
+          "completionRate": 85.71
+        },
+        "financialStats": {
+          "totalEarned": 10500000,
+          "currentWalletBalance": 2500000,
+          "pendingPayout": 1000000,
+          "totalWithdrawn": 7000000
+        }
+      }
+    ],
+    "totalCount": 120,
+    "pageNumber": 1,
+    "pageSize": 10,
+    "totalPages": 12
+  }
+  ```
+
+#### 🔹 API 2: Xem chi tiết báo cáo ca & dòng tiền của một Điều dưỡng cụ thể
+- **Endpoint:** `GET /api/v1/admin/nurses/{nurseId}/statistics`
+- **Quyền truy cập:** `[Authorize(Roles = "Admin")]`
+- **Dữ liệu trả về (`AdminNurseDetailStatisticDto`):**
+  - Thông tin đầy đủ của Điều dưỡng (Họ tên, SĐT, CCCD, Bằng cấp, Trạng thái tài khoản).
+  - Thống kê chi tiết ca: Tổng ca, ca hoàn thành, ca hủy (do khách hủy vs do điều dưỡng hủy), ca tranh chấp.
+  - Báo cáo tài chính: Tổng tiền công tích lũy (`totalEarned`), Số dư ví khả dụng (`currentBalance`), Số tiền chờ duyệt rút (`pendingPayout`), Tổng tiền đã giải ngân về ngân hàng (`totalWithdrawn`).
+  - Danh sách 10 ca gần nhất của điều dưỡng (`recentBookings`): Mã ca, Tên khách hàng, Tên bệnh nhân, Thời gian bắt đầu, Tổng tiền deal, Trạng thái.
+  - Lịch sử 10 giao dịch ví gần nhất (`recentTransactions`): Loại giao dịch (Cộng tiền ca, Rút tiền), Số tiền biến động, Số dư sau giao dịch, Thời gian.
+
+---
+
+### 6.2. Yêu Cầu Giao Diện Frontend Phía Quản Trị (`CareLink_FE`)
+
+1. **Menu Quản trị:** Bổ sung mục **"Thống kê Điều dưỡng"** (`/admin/nurse-statistics`) trong thanh điều hướng Admin.
+2. **Bảng Thống kê Tổng quan (Data Table):**
+   - Bộ lọc đầu bảng: Ô tìm kiếm điều dưỡng, dropdown quận/huyện, bộ chọn khoảng ngày (DateRangePicker).
+   - Các cột hiển thị:
+     1. **Điều dưỡng:** Avatar + Họ tên + Email/SĐT.
+     2. **Khu vực & Đánh giá:** Quận làm việc + Sao trung bình (ví dụ: ⭐ 4.9/5).
+     3. **Số ca trực:** `Tổng ca: 35` (Badge Xanh: `30 Hoàn thành`, Badge Đỏ: `2 Hủy`).
+     4. **Tỷ lệ hoàn thành:** Thanh progress bar % (ví dụ: 85.7%).
+     5. **Tổng tiền đã nhận (`Total Earned`):** Format VNĐ (ví dụ: `10.500.000 đ`).
+     6. **Số dư ví hiện tại (`Balance`):** Hiển thị số dư khả dụng trong ví điều dưỡng (ví dụ: `2.500.000 đ`).
+     7. **Đã rút về NH (`Withdrawn`):** Số tiền admin đã chuyển khoản (ví dụ: `7.000.000 đ`).
+     8. **Hành động:** Nút "Xem chi tiết" (Mở drawer / modal chi tiết ca và sao kê ví).
+3. **Drawer / Modal Chi tiết Điều dưỡng (`NurseDetailModal`):**
+   - Thẻ tóm tắt chỉ số: Tổng doanh thu, Số dư khả dụng, Tỷ lệ hủy ca.
+   - Tab 1: **Lịch sử các ca làm** (Bảng danh sách ca, trạng thái, người đặt, tiền ca).
+   - Tab 2: **Sao kê ví & Rút tiền** (Bảng biến động số dư, mã tham chiếu ngân hàng khi rút tiền).
 
 ---
 

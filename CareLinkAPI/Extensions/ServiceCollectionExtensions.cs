@@ -67,6 +67,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReviewService, ReviewService>();
         services.AddScoped<IDisputeService, DisputeService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
+        services.AddScoped<IAdminNurseStatisticsService, AdminNurseStatisticsService>();
         services.AddScoped<IHandbookService, HandbookService>();
 
         // Module 7: Payment & Wallet

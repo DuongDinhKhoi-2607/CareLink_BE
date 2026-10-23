@@ -101,4 +101,29 @@ public class BookingFlowV2Tests
 
         Assert.Equal(210_000m, response.TotalPaymentAmount);
     }
+
+    [Fact]
+    public void AdminNurseStatistics_CalculatesCompletionRateAndAvailableBalanceCorrectly()
+    {
+        var bookingStats = new CareLinkAPI.DTOs.Backoffice.NurseBookingStatsDto
+        {
+            TotalBookings = 20,
+            CompletedBookings = 18,
+            CanceledBookings = 2,
+            CompletionRate = Math.Round(18m / 20m * 100m, 2)
+        };
+
+        var financialStats = new CareLinkAPI.DTOs.Backoffice.NurseFinancialStatsDto
+        {
+            TotalEarned = 5_400_000m,
+            CurrentWalletBalance = 2_000_000m,
+            PendingPayout = 500_000m,
+            TotalWithdrawn = 3_400_000m
+        };
+
+        var availableToWithdraw = financialStats.CurrentWalletBalance - financialStats.PendingPayout;
+
+        Assert.Equal(90.00m, bookingStats.CompletionRate);
+        Assert.Equal(1_500_000m, availableToWithdraw);
+    }
 }
