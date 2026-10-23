@@ -345,8 +345,13 @@ public class NurseVerificationService(
             if (!request.Checklist.CccdValid || !request.Checklist.DegreeOrStudentCardValid || !request.Checklist.FaceMatch)
                 throw new BadRequestException("Checklist chưa đầy đủ (CCCD, Bằng/Thẻ SV, và Khớp khuôn mặt phải hợp lệ).");
 
-            if (nurse.PractitionerType == (int)NursePractitionerType.MedicalStudent && (!request.Checklist.StudentEmailVerified || !nurse.IsStudentEmailVerified))
-                throw new BadRequestException("Sinh viên Y khoa bắt buộc phải xác thực email trường (.edu.vn / .edu).");
+            if (nurse.PractitionerType == (int)NursePractitionerType.MedicalStudent)
+            {
+                if (!nurse.IsStudentEmailVerified)
+                    throw new BadRequestException("Sinh viên Y khoa bắt buộc phải xác thực email trường (.edu.vn / .edu).");
+
+                request.Checklist.StudentEmailVerified = true;
+            }
 
             nurse.Status = (int)NurseStatus.Active;
             nurse.UpdatedAt = now;
