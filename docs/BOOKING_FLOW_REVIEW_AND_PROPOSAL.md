@@ -443,14 +443,14 @@ ALTER TABLE public.bookings
 
 ---
 
-### 7.3. Checklist Kỹ Thuật Dành Riêng Cho Khôi (Backend)
+### 7.3. Checklist Kỹ Thuật Dành Riêng(Backend)
 
 | STT | Nhiệm vụ kỹ thuật | File liên quan | Trạng thái |
 |:---:|:---|:---|:---:|
-| 1 | **Sửa gấp bug không cộng Balance:** Trong hàm `SettleBookingEarningAsync`, bổ sung `wallet.Balance += totalPrice;` | `CareLinkAPI/Services/WalletService.cs` | ⚠️ Cần cập nhật |
-| 2 | **Cập nhật câu miêu tả giao dịch:** Sửa từ *"Khách thanh toán trực tiếp"* thành *"Khách đã thanh toán PayOS"* | `CareLinkAPI/Services/WalletService.cs` | ⚠️ Cần cập nhật |
-| 3 | **Bảo vệ tính toàn vẹn tài chính (Invariants):** Đảm bảo `CreatePayoutAsync` và `ApprovePayoutAsync` luôn chạy trong transaction `IsolationLevel.Serializable` | `CareLinkAPI/Services/WalletService.cs` | ✅ Đã chuẩn |
-| 4 | **Bổ sung Unit Test hạch toán ví Escrow:** Kiểm tra cả `Balance` và `TotalEarned` đều tăng khi hoàn thành ca, và lệnh rút tiền trừ đúng số dư | `CareLinkAPI.Tests/FlowBusinessRulesTests.cs` | ⚠️ Cần cập nhật |
+| 1 | **Sửa gấp bug không cộng Balance:** Trong hàm `SettleBookingEarningAsync`, bổ sung `wallet.Balance += totalPrice;` | `CareLinkAPI/Services/WalletService.cs` | ✅ Đã hoàn thành 100% |
+| 2 | **Cập nhật câu miêu tả giao dịch:** Sửa từ *"Khách thanh toán trực tiếp"* thành *"Khách đã thanh toán PayOS"* | `CareLinkAPI/Services/WalletService.cs` | ✅ Đã hoàn thành 100% |
+| 3 | **Bảo vệ tính toàn vẹn tài chính (Invariants):** Đảm bảo `CreatePayoutAsync` và `ApprovePayoutAsync` luôn chạy trong transaction `IsolationLevel.Serializable` | `CareLinkAPI/Services/WalletService.cs` | ✅ Đã hoàn thành 100% |
+| 4 | **Bổ sung Unit Test hạch toán ví Escrow:** Kiểm tra cả `Balance` và `TotalEarned` đều tăng khi hoàn thành ca, và lệnh rút tiền trừ đúng số dư | `CareLinkAPI.Tests/FlowBusinessRulesTests.cs` | ✅ Đã hoàn thành 100% |
 
 ---
 
