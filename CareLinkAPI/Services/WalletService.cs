@@ -40,6 +40,7 @@ public class WalletService(
 
         var now = DateTime.UtcNow;
 
+        wallet.Balance += totalPrice;
         wallet.TotalEarned += totalPrice;
         wallet.UpdatedAt = now;
 
@@ -51,7 +52,7 @@ public class WalletService(
             Type = (int)WalletTransactionType.BookingEarning,
             Amount = totalPrice,
             BalanceAfter = wallet.Balance,
-            Description = $"Doanh thu ca chăm sóc (Khách thanh toán trực tiếp {Money(totalPrice)})",
+            Description = $"Tiền công ca chăm sóc (Khách đã thanh toán PayOS {Money(totalPrice)})",
             CreatedAt = now
         }, cancellationToken);
 
@@ -61,7 +62,7 @@ public class WalletService(
             await NotifyAsync(
                 nurse.UserId,
                 "Ca chăm sóc hoàn tất",
-                $"Bạn đã hoàn thành ca chăm sóc. Tiền công {Money(totalPrice)} do khách thanh toán trực tiếp cho bạn. Tổng thu nhập tích luỹ: {Money(wallet.TotalEarned)}.",
+                $"Bạn đã hoàn thành ca chăm sóc. Tiền công {Money(totalPrice)} đã được chuyển vào số dư ví của bạn. Số dư khả dụng hiện tại: {Money(wallet.Balance)}.",
                 NotificationTypes.WalletCredited,
                 bookingId,
                 cancellationToken);

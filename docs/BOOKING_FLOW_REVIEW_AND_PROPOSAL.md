@@ -220,4 +220,171 @@ ALTER TABLE public.bookings
 
 Toàn bộ tài liệu chi tiết phiên bản V2.1 đã được cập nhật hoàn chỉnh tại [`docs/BOOKING_FLOW_REVIEW_AND_PROPOSAL.md`](file:///d:/Documents/EXE1/CareLink_BE/docs/BOOKING_FLOW_REVIEW_AND_PROPOSAL.md).
 
-👉 **Bạn thấy thiết kế tính năng Combo Nhiều Dịch Vụ và toàn bộ luồng V2.1 này đã đúng 100% mong muốn chưa? Nếu bạn đồng ý, hãy phản hồi "OK" hoặc "Đồng ý", tôi sẽ tiến hành triển khai code Backend và chạy migration DB ngay!**
+---
+
+## 7. QUY TRÌNH HẠCH TOÁN VÍ ĐIỀU DƯỠNG & THAO TÁC RÚT TIỀN (LƯU Ý DÀNH CHO KHÔI BE)
+
+> **Mục tiêu:** Đảm bảo luồng tiền minh bạch 100%, bảo vệ tiền của điều dưỡng theo mô hình ký quỹ (Escrow), và cung cấp quy trình rút tiền an toàn, chống gian lận.
+
+```
+           [KHÁCH HÀNG]
+                │
+                │ Quét mã VietQR thanh toán 100% qua PayOS
+                │ (Giá Deal Điều dưỡng + 60.000đ Phí sàn)
+                ▼
+     ┌────────────────────────────────────────────────────────┐
+     │          TÀI KHOẢN TẠM GIỮ CARELINK (ESCROW)          │
+     │     - Trạng thái Booking: Accepted / InProgress        │
+     │     - Tiền an toàn, chưa giải ngân cho bên nào         │
+     └──────────────────────────┬─────────────────────────────┘
+                                │
+                                │ Hai bên gặp nhau & hoàn thành ca
+                                │ Điều dưỡng ký Báo cáo y tế
+                                │ Gia đình bấm Xác nhận nghiệm thu
+                                ▼
+     ┌────────────────────────────────────────────────────────┐
+     │       HẠCH TOÁN TỰ ĐỘNG KHI CA HOÀN THÀNH              │
+     │  1. Phí sàn 60.000đ  ──> Giữ lại doanh thu CareLink   │
+     │  2. Giá Deal điều dưỡng (ví dụ 300.000đ) ──────────┐   │
+     └────────────────────────────────────────────────────│───┘
+                                                          ▼
+                                          ┌───────────────────────────────┐
+                                          │   VÍ ĐIỀU DƯỠNG (WALLETS)     │
+                                          │  Balance     += DealPrice     │
+                                          │  TotalEarned += DealPrice     │
+                                          │  Ghi log: BookingEarning      │
+                                          └───────────────┬───────────────┘
+                                                          │
+                                                          │ Điều dưỡng tạo Lệnh Rút Tiền
+                                                          │ POST /api/v1/wallet/payouts
+                                                          ▼
+                                          ┌───────────────────────────────┐
+                                          │  LỆNH RÚT TIỀN (PENDING)      │
+                                          │  Khoá số dư khả dụng          │
+                                          └───────────────┬───────────────┘
+                                                          │
+                                                          │ Admin kiểm tra & chuyển khoản NH
+                                                          │ PUT /api/v1/admin/payouts/{id}/approve
+                                                          ▼
+                                          ┌───────────────────────────────┐
+                                          │   TIỀN VỀ TÀI KHOẢN NGÂN HÀNG │
+                                          │   Balance -= Amount           │
+                                          │   TotalWithdrawn += Amount    │
+                                          └───────────────────────────────┘
+```
+
+### 7.1. Cơ Chế Tiền Về Ví Khi Hoàn Thành Ca Trực (Earning Settlement)
+
+1. **Điều kiện kích hoạt hạch toán:**
+   - Ca trực chuyển sang trạng thái `Completed` khi:
+     - **Cách 1 (Bình thường):** Cả Điều dưỡng và Gia đình đều bấm xác nhận hoàn thành (`nurse_confirmed_at != null` và `customer_confirmed_at != null`).
+     - **Cách 2 (Tự động):** Điều dưỡng đã ký nghiệm thu, sau **24 giờ** gia đình không khiếu nại thì hệ thống tự động chốt `Completed`.
+2. **Quy tắc phân chia dòng tiền (Formula):**
+   - **Tổng tiền khách đã trả (PayOS):** `TotalPaymentAmount = DealPrice + 60.000đ`.
+   - **Phí nền tảng (PlatformFee):** `60.000đ` thuộc doanh thu của CareLink (lưu trong `payments.platform_fee`).
+   - **Thu nhập thực nhận của Điều dưỡng:** Toàn bộ `DealPrice` (ví dụ: `300.000đ`).
+3. **Cập nhật dữ liệu Ví ([WalletService.cs](file:///d:/Documents/EXE1/CareLink_BE/CareLinkAPI/Services/WalletService.cs)):**
+   - **Cộng trực tiếp vào số dư khả dụng:** `wallet.Balance += dealPrice;` *(Khôi lưu ý sửa ngay lỗi code cũ chỉ cộng `TotalEarned` mà quên cộng `Balance`)*.
+   - **Cộng tổng thu nhập tích lũy:** `wallet.TotalEarned += dealPrice;`.
+   - **Ghi nhận lịch sử giao dịch (`wallet_transactions`):**
+     - `Type = 1 (BookingEarning)`.
+     - `Amount = +dealPrice`.
+     - `BalanceAfter = wallet.Balance`.
+     - `Description = $"Tiền công ca chăm sóc #{bookingId} (Khách đã thanh toán PayOS)"`.
+   - **Thông báo Realtime:** Bắn Notification và SignalR cho điều dưỡng:
+     > *"Ca chăm sóc #{bookingId} đã hoàn tất nghiệm thu. Tiền công {dealPrice:N0}đ đã được cộng vào số dư ví của bạn."*
+
+---
+
+### 7.2. Quy Trình Thao Tác Rút Tiền Ra Ngoài Ngân Hàng (Payout Flow)
+
+#### 🔹 Bước 1: Điều dưỡng kiểm tra số dư & tạo yêu cầu rút tiền
+- **Màn hình Ví của tôi (`NurseWalletScreen`):**
+  - Gọi API: `GET /api/v1/wallet/me`
+  - Hiển thị các chỉ số tài chính:
+    - **Số dư khả dụng (`balance`):** Số tiền thực tế có thể rút ngay.
+    - **Đang chờ duyệt (`pendingPayout`):** Các lệnh rút đang chờ Admin xử lý.
+    - **Khả dụng có thể rút tiếp:** `Available = Balance - PendingPayout`.
+    - **Tổng thu nhập tích lũy (`totalEarned`):** Thống kê tổng tiền đã kiếm được từ trước tới nay.
+    - **Tổng đã rút (`totalWithdrawn`):** Tổng tiền đã chuyển về ngân hàng thành công.
+  - Gọi API: `GET /api/v1/wallet/me/transactions` để xem lịch sử sao kê chi tiết (cộng tiền ca làm, trừ tiền rút, v.v.).
+- **Tạo lệnh rút tiền (Modal Payout):**
+  - Điều dưỡng bấm nút **"Rút tiền về tài khoản ngân hàng"**.
+  - Nhập thông tin:
+    - **Số tiền muốn rút (`amount`):** Tối thiểu `50.000đ`, tối đa không vượt quá `Available`.
+    - **Ngân hàng (`bankName`):** Chọn từ danh sách ngân hàng Việt Nam (VietinBank, Vietcombank, Techcombank, MB Bank, ACB, VPBank, TPBank...).
+    - **Số tài khoản (`bankAccountNumber`):** Số tài khoản chính chủ của điều dưỡng.
+    - **Tên chủ tài khoản (`bankAccountName`):** Tên in hoa không dấu (ví dụ: `NGUYEN VAN A`).
+  - Bấm **"Gửi yêu cầu rút tiền"** $\rightarrow$ Gọi API: `POST /api/v1/wallet/payouts`.
+  - **Xử lý Backend:**
+    - Bọc giao dịch với mức cô lập `IsolationLevel.Serializable` để chống bấm liên tiếp (Double-spending / Race condition).
+    - Tạo bản ghi mới trong bảng `payout_requests` với `Status = 1 (Pending)`.
+    - Số tiền này được cộng dồn vào `pendingPayout` để phong tỏa tạm thời, không cho phép tạo thêm lệnh rút vượt quá số dư ví.
+
+#### 🔹 Bước 2: Quản trị viên (Admin) xét duyệt & Thực hiện chuyển khoản
+- **Trang quản trị Payouts (`AdminPayoutManagement`):**
+  - Admin truy cập danh sách lệnh rút: `GET /api/v1/admin/payouts?status=1`.
+  - Admin kiểm tra thông tin tài khoản ngân hàng của điều dưỡng và số tiền yêu cầu.
+  - Admin mở ứng dụng ngân hàng doanh nghiệp của CareLink và chuyển khoản thực tế qua VietQR / Internet Banking sang STK của điều dưỡng.
+- **Trường hợp A: Chuyển khoản thành công $\rightarrow$ Admin DUYỆT:**
+  - Admin bấm nút **"Xác nhận đã chuyển khoản"** trên hệ thống $\rightarrow$ Gọi API: `PUT /api/v1/admin/payouts/{id}/approve`.
+  - Payload gửi lên:
+    ```json
+    {
+      "bankReferenceCode": "FT2629781923847",
+      "adminNote": "Đã chuyển khoản thành công từ ngân hàng VietinBank"
+    }
+    ```
+  - **Xử lý Backend:**
+    - Cập nhật số dư ví điều dưỡng:
+      - `wallet.Balance -= payout.Amount;`
+      - `wallet.TotalWithdrawn += payout.Amount;`
+    - Cập nhật trạng thái lệnh: `payout.Status = 2 (Approved)`, lưu `ResolvedAt`, `ResolvedBy`, `BankReferenceCode`.
+    - Sinh 1 bản ghi `wallet_transactions`:
+      - `Type = 3 (Withdrawal)`
+      - `Amount = -payout.Amount`
+      - `BalanceAfter = wallet.Balance`
+      - `Description = $"Rút tiền về {payout.BankName} - {payout.BankAccountNumber} (Mã GD: {request.BankReferenceCode})"`
+    - Gửi thông báo Notification đến điều dưỡng:
+      > *"Yêu cầu rút {amount:N0}đ đã được chuyển khoản thành công về tài khoản {bankName} - {bankAccountNumber}. Mã giao dịch: {code}."*
+- **Trường hợp B: Phát hiện sai sót / nghi vấn $\rightarrow$ Admin TỪ CHỐI:**
+  - Nếu số tài khoản sai, tên chủ thẻ không trùng khớp hoặc có dấu hiệu gian lận, Admin bấm **"Từ chối"** $\rightarrow$ Gọi API: `PUT /api/v1/admin/payouts/{id}/reject`.
+  - Payload gửi lên:
+    ```json
+    {
+      "adminNote": "Số tài khoản ngân hàng không tồn tại hoặc sai tên người thụ hưởng."
+    }
+    ```
+  - **Xử lý Backend:**
+    - Cập nhật trạng thái lệnh: `payout.Status = 3 (Rejected)`.
+    - Giải phóng khoản tiền phong tỏa `pendingPayout` (trả lại quyền rút số tiền này vào số dư khả dụng của điều dưỡng).
+    - Gửi thông báo Notification cho điều dưỡng kèm lý do từ chối để họ cập nhật lại thông tin tài khoản ngân hàng.
+
+---
+
+### 7.3. Checklist Kỹ Thuật Dành Riêng Cho Khôi (Backend)
+
+| STT | Nhiệm vụ kỹ thuật | File liên quan | Trạng thái |
+|:---:|:---|:---|:---:|
+| 1 | **Sửa gấp bug không cộng Balance:** Trong hàm `SettleBookingEarningAsync`, bổ sung `wallet.Balance += totalPrice;` | `CareLinkAPI/Services/WalletService.cs` | ⚠️ Cần cập nhật |
+| 2 | **Cập nhật câu miêu tả giao dịch:** Sửa từ *"Khách thanh toán trực tiếp"* thành *"Khách đã thanh toán PayOS"* | `CareLinkAPI/Services/WalletService.cs` | ⚠️ Cần cập nhật |
+| 3 | **Bảo vệ tính toàn vẹn tài chính (Invariants):** Đảm bảo `CreatePayoutAsync` và `ApprovePayoutAsync` luôn chạy trong transaction `IsolationLevel.Serializable` | `CareLinkAPI/Services/WalletService.cs` | ✅ Đã chuẩn |
+| 4 | **Bổ sung Unit Test hạch toán ví Escrow:** Kiểm tra cả `Balance` và `TotalEarned` đều tăng khi hoàn thành ca, và lệnh rút tiền trừ đúng số dư | `CareLinkAPI.Tests/FlowBusinessRulesTests.cs` | ⚠️ Cần cập nhật |
+
+---
+
+### 7.4. Checklist Rà Soát Màn Hình Phía Frontend (`CareLink_FE`)
+
+1. **Màn hình Ví điều dưỡng (`/nurse/wallet`):**
+   - Card hiển thị 4 số liệu: Số dư khả dụng, Tiền chờ duyệt, Tổng thu nhập, Tổng tiền đã rút.
+   - Nút hành động nổi bật: **"Rút tiền về ngân hàng"**.
+   - Bảng lịch sử biến động số dư: Có icon phân biệt loại giao dịch (Xanh lá: `+Tiền công ca`, Đỏ: `-Rút tiền / Phạt`).
+2. **Modal Tạo lệnh rút tiền (`PayoutRequestModal`):**
+   - Dropdown chọn ngân hàng (logo + tên ngân hàng).
+   - Ô nhập số tài khoản & tự động in hoa tên chủ thẻ.
+   - Nút bấm nhanh các mốc tiền: `100.000đ`, `200.000đ`, `500.000đ`, `Rút tất cả`.
+   - Hiển thị cảnh báo rõ ràng nếu số tiền nhập lớn hơn số dư khả dụng.
+3. **Màn hình Quản trị viên duyệt rút tiền (`/admin/payouts`):**
+   - Bảng danh sách các lệnh rút đang `Pending`: Tên điều dưỡng, Số tiền, Ngân hàng, STK, Chủ TK, Ngày tạo.
+   - Nút **"Duyệt chuyển khoản"**: Mở modal nhập `Mã tham chiếu ngân hàng` (bắt buộc) và `Ghi chú` rồi xác nhận.
+   - Nút **"Từ chối"**: Mở modal nhập lý do từ chối (bắt buộc).

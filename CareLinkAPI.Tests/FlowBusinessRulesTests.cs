@@ -155,12 +155,11 @@ public class FlowBusinessRulesTests
     }
 
     [Fact]
-    public async Task SettleBookingEarning_DirectPaymentModel_UpdatesTotalEarned_WithoutIncreasingWithdrawableBalance()
+    public async Task SettleBookingEarning_EscrowPaymentModel_UpdatesBalanceAndTotalEarned()
     {
-        // Arrange: In direct payment model, customer pays nurse in cash/transfer.
-        // CareLink already collected 60.000 VNĐ platform fee through PayOS.
-        // Therefore, nurse's Balance (withdrawable) does NOT increase with customer cash,
-        // but TotalEarned tracks cumulative earnings.
+        // Arrange: In Escrow model, customer pays 100% through PayOS (DealPrice + 60k platform fee).
+        // CareLink holds the funds until both sides confirm completion.
+        // Therefore, nurse's Balance (withdrawable) increases with DealPrice, and TotalEarned tracks cumulative earnings.
         var walletRepo = new FakeWalletRepository();
         var payoutRepo = new FakePayoutRepository();
         var nurseRepo = new FakeNurseRepository();
@@ -185,17 +184,18 @@ public class FlowBusinessRulesTests
         // Assert
         var wallet = await walletRepo.GetByNurseIdAsync(nurseId);
         Assert.NotNull(wallet);
-        Assert.Equal(0m, wallet.Balance); // Direct payment: withdrawable balance remains 0
+        Assert.Equal(servicePrice, wallet.Balance); // Escrow payment: withdrawable balance credited
         Assert.Equal(servicePrice, wallet.TotalEarned); // TotalEarned tracked
         Assert.Single(walletRepo.Transactions);
         var tx = walletRepo.Transactions.First();
         Assert.Equal((int)WalletTransactionType.BookingEarning, tx.Type);
         Assert.Equal(servicePrice, tx.Amount);
-        Assert.Contains("Khách thanh toán trực tiếp", tx.Description);
+        Assert.Contains("Khách đã thanh toán PayOS", tx.Description);
 
         // Idempotency check: settling again does not duplicate transaction or amount
         await walletService.SettleBookingEarningAsync(nurseId, bookingId, servicePrice, platformFee);
         Assert.Single(walletRepo.Transactions);
+        Assert.Equal(servicePrice, wallet.Balance);
         Assert.Equal(servicePrice, wallet.TotalEarned);
     }
 
