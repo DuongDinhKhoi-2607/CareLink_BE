@@ -18,4 +18,11 @@ public class RegisterRequest
     [Required]
     [Range(0, 1)]
     public int Role { get; set; }
+
+    [MaxLength(100)]
+    public string? FullName { get; set; }
+
+    [Phone]
+    [MaxLength(20)]
+    public string? Phone { get; set; }
 }
