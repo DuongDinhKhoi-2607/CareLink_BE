@@ -28,4 +28,7 @@ public class NurseSearchItemResponse
 
     /// <summary>Haversine distance from the customer in km (null when no coordinates were supplied).</summary>
     public double? DistanceKm { get; init; }
+
+    /// <summary>Giá dịch vụ do điều dưỡng cấu hình (nếu tìm theo service cụ thể).</summary>
+    public decimal? ServicePrice { get; init; }
 }

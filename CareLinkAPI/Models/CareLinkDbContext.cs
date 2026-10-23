@@ -60,6 +60,12 @@ public partial class CareLinkDbContext : DbContext
 
     public virtual DbSet<Message> Messages { get; set; }
 
+    public virtual DbSet<NurseServicePricing> NurseServicePricings { get; set; }
+
+    public virtual DbSet<BookingProposalService> BookingProposalServices { get; set; }
+
+    public virtual DbSet<BookingServiceItem> BookingServices { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
@@ -149,6 +155,8 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.CanceledAt).HasColumnName("canceled_at");
             entity.Property(e => e.CanceledBy).HasColumnName("canceled_by");
             entity.Property(e => e.CompletedAt).HasColumnName("completed_at");
+            entity.Property(e => e.NurseConfirmedAt).HasColumnName("nurse_confirmed_at");
+            entity.Property(e => e.CustomerConfirmedAt).HasColumnName("customer_confirmed_at");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
@@ -1063,6 +1071,74 @@ public partial class CareLinkDbContext : DbContext
                 .HasForeignKey(d => d.SenderUserId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_message_sender_user");
+        });
+
+        modelBuilder.Entity<NurseServicePricing>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("nurse_service_pricings_pkey");
+            entity.ToTable("nurse_service_pricings");
+            entity.HasIndex(e => new { e.NurseId, e.ServiceId }, "uq_nurse_service").IsUnique();
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()").HasColumnName("id");
+            entity.Property(e => e.NurseId).HasColumnName("nurse_id");
+            entity.Property(e => e.ServiceId).HasColumnName("service_id");
+            entity.Property(e => e.CustomPrice).HasPrecision(12, 2).HasColumnName("custom_price");
+            entity.Property(e => e.IsOffered).HasDefaultValue(true).HasColumnName("is_offered");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("timezone('utc'::text, now())").HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("timezone('utc'::text, now())").HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Nurse).WithMany(p => p.ServicePricings)
+                .HasForeignKey(d => d.NurseId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("nurse_service_pricings_nurse_id_fkey");
+
+            entity.HasOne(d => d.Service).WithMany(p => p.NurseServicePricings)
+                .HasForeignKey(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("nurse_service_pricings_service_id_fkey");
+        });
+
+        modelBuilder.Entity<BookingProposalService>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("booking_proposal_services_pkey");
+            entity.ToTable("booking_proposal_services");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()").HasColumnName("id");
+            entity.Property(e => e.ProposalId).HasColumnName("proposal_id");
+            entity.Property(e => e.ServiceId).HasColumnName("service_id");
+            entity.Property(e => e.Price).HasPrecision(12, 2).HasColumnName("price");
+            entity.Property(e => e.DurationMinutes).HasColumnName("duration_minutes");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("timezone('utc'::text, now())").HasColumnName("created_at");
+
+            entity.HasOne(d => d.Proposal).WithMany(p => p.ProposalServices)
+                .HasForeignKey(d => d.ProposalId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("booking_proposal_services_proposal_id_fkey");
+
+            entity.HasOne(d => d.Service).WithMany(p => p.BookingProposalServices)
+                .HasForeignKey(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("booking_proposal_services_service_id_fkey");
+        });
+
+        modelBuilder.Entity<BookingServiceItem>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("booking_services_pkey");
+            entity.ToTable("booking_services");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()").HasColumnName("id");
+            entity.Property(e => e.BookingId).HasColumnName("booking_id");
+            entity.Property(e => e.ServiceId).HasColumnName("service_id");
+            entity.Property(e => e.Price).HasPrecision(12, 2).HasColumnName("price");
+            entity.Property(e => e.DurationMinutes).HasColumnName("duration_minutes");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("timezone('utc'::text, now())").HasColumnName("created_at");
+
+            entity.HasOne(d => d.Booking).WithMany(p => p.BookingServices)
+                .HasForeignKey(d => d.BookingId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("booking_services_booking_id_fkey");
+
+            entity.HasOne(d => d.Service).WithMany(p => p.BookingServices)
+                .HasForeignKey(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("booking_services_service_id_fkey");
         });
 
         OnModelCreatingPartial(modelBuilder);

@@ -23,6 +23,23 @@ public class RecipientsController(ICareRecipientService recipientService) : Cont
     }
 
     /// <summary>
+    /// Kiểm tra nhanh khách hàng đã có hồ sơ người bệnh để bắt đầu book/deal ca hay chưa.
+    /// </summary>
+    [HttpGet("check-readiness")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<object>> CheckReadiness(CancellationToken cancellationToken)
+    {
+        var list = await recipientService.GetCustomerRecipientsAsync(this.GetCurrentUserId(), cancellationToken);
+        var hasRecipients = list.Count > 0;
+        return Ok(new
+        {
+            hasRecipients,
+            count = list.Count,
+            message = hasRecipients ? "Hợp lệ để bắt đầu đặt lịch." : "Vui lòng tạo ít nhất một hồ sơ người bệnh trước khi đặt lịch hoặc gửi đề xuất."
+        });
+    }
+
+    /// <summary>
     /// User-03: Lấy thông tin chi tiết một người được chăm sóc theo ID.
     /// </summary>
     [HttpGet("{id:guid}")]

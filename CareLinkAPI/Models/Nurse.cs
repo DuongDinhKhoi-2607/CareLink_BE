@@ -69,6 +69,8 @@ public partial class Nurse
 
     public virtual ICollection<PayoutRequest> PayoutRequests { get; set; } = new List<PayoutRequest>();
 
+    public virtual ICollection<NurseServicePricing> ServicePricings { get; set; } = new List<NurseServicePricing>();
+
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual User User { get; set; } = null!;

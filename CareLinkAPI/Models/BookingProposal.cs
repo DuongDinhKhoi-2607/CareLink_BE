@@ -57,5 +57,7 @@ public partial class BookingProposal
 
     public virtual Booking? Booking { get; set; }
 
+    public virtual ICollection<BookingProposalService> ProposalServices { get; set; } = new List<BookingProposalService>();
+
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 }

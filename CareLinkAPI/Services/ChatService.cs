@@ -19,13 +19,13 @@ public class ChatService(
     IUserRepository users,
     ICustomerRepository customers,
     INurseRepository nurses,
-    IServiceRepository services,
     ICareRecipientRepository recipients,
     IAddressRepository addresses,
     IBookingRepository bookings,
     INurseAvailabilityRepository availabilities,
     INotificationRepository notifications,
     IUnitOfWork unitOfWork,
+    CareLinkDbContext dbContext,
     IOptions<BookingOptions> bookingOptions,
     ILogger<ChatService> logger) : IChatService
 {
@@ -310,12 +310,25 @@ public class ChatService(
                 $"The booking proposal must start at least {_bookingOptions.MinLeadTimeMinutes} minutes from now.");
         }
 
-        var service = await services.GetByIdAsync(request.ServiceId, ct)
-                      ?? throw new NotFoundException("Service not found.");
-        if (!service.IsActive)
+        var targetServiceIds = request.ServiceIds != null && request.ServiceIds.Count > 0
+            ? request.ServiceIds.Distinct().ToList()
+            : (request.ServiceId.HasValue ? new List<Guid> { request.ServiceId.Value } : new List<Guid>());
+
+        if (targetServiceIds.Count == 0)
         {
-            throw new BadRequestException("Service is not available.");
+            throw new BadRequestException("Vui lòng chọn ít nhất một dịch vụ cho ca chăm sóc.");
         }
+
+        var selectedServices = await dbContext.Services
+            .Where(s => targetServiceIds.Contains(s.Id) && s.IsActive)
+            .ToListAsync(ct);
+
+        if (selectedServices.Count != targetServiceIds.Count)
+        {
+            throw new BadRequestException("Một hoặc nhiều dịch vụ đã chọn không tồn tại hoặc không còn hoạt động.");
+        }
+
+        var primaryService = selectedServices.First();
 
         var recipient = await recipients.GetByIdAsync(request.RecipientId, ct)
                         ?? throw new NotFoundException("Care recipient not found.");
@@ -327,14 +340,27 @@ public class ChatService(
         var (addressText, latitude, longitude) =
             await ResolveAddressAsync(customerId, recipient, request.AddressId, ct);
 
-        var endUtc = startUtc.AddMinutes(service.DurationMinutes);
+        var totalDurationMinutes = selectedServices.Sum(s => s.DurationMinutes);
+        var endUtc = startUtc.AddMinutes(totalDurationMinutes);
         if (!VietnamTime.IsSameLocalDay(startUtc, endUtc))
         {
             throw new BadRequestException("The booking proposal must start and end on the same day.");
         }
 
-        // Price is authoritative from backend service entity
-        var totalPrice = service.BasePrice;
+        // Lấy bảng giá riêng của điều dưỡng nếu đã thiết lập
+        var nursePricings = await dbContext.NurseServicePricings
+            .Where(p => p.NurseId == conversation.NurseId && targetServiceIds.Contains(p.ServiceId))
+            .ToDictionaryAsync(p => p.ServiceId, ct);
+
+        var defaultTotalPrice = selectedServices.Sum(s =>
+            nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered
+                ? pricing.CustomPrice
+                : s.BasePrice);
+
+        // Cho phép đàm phán giá: nếu gia đình đề xuất giá deal thì dùng giá deal, ngược lại dùng tổng giá niêm yết
+        var totalPrice = request.ProposedTotalPrice.HasValue && request.ProposedTotalPrice.Value > 0
+            ? request.ProposedTotalPrice.Value
+            : defaultTotalPrice;
 
         var proposalId = await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
@@ -355,7 +381,7 @@ public class ChatService(
                 ConversationId = conversationId,
                 ProposalNumber = nextNum,
                 SenderUserId = actor.UserId,
-                ServiceId = service.Id,
+                ServiceId = primaryService.Id,
                 RecipientId = recipient.Id,
                 AddressId = request.AddressId,
                 AddressSnapshot = addressText,
@@ -372,13 +398,33 @@ public class ChatService(
 
             await conversationRepo.AddProposalAsync(proposal, ct);
 
+            // Lưu danh sách từng dịch vụ trong proposal
+            foreach (var s in selectedServices)
+            {
+                var itemPrice = nursePricings.TryGetValue(s.Id, out var p) && p.IsOffered
+                    ? p.CustomPrice
+                    : s.BasePrice;
+
+                dbContext.BookingProposalServices.Add(new BookingProposalService
+                {
+                    Id = Guid.NewGuid(),
+                    ProposalId = proposal.Id,
+                    ServiceId = s.Id,
+                    Price = itemPrice,
+                    DurationMinutes = s.DurationMinutes,
+                    CreatedAt = nowUtc
+                });
+            }
+
+            var serviceNames = string.Join(" + ", selectedServices.Select(s => s.ServiceName));
+
             // Add event message linking to this proposal
             var eventMessage = new Message
             {
                 Id = Guid.NewGuid(),
                 ConversationId = conversationId,
                 SenderUserId = actor.UserId,
-                Content = $"Khách hàng đã gửi đề xuất ca chăm sóc #{nextNum}: {service.ServiceName} ({FormatTime(startUtc)}) - {totalPrice.ToString("N0", ViCulture)}đ",
+                Content = $"Khách hàng đã gửi đề xuất ca chăm sóc #{nextNum}: {serviceNames} ({FormatTime(startUtc)} - {totalDurationMinutes}p) - {totalPrice.ToString("N0", ViCulture)}đ",
                 Type = (int)MessageType.ProposalCard,
                 ProposalId = proposal.Id,
                 CreatedAt = nowUtc
@@ -395,7 +441,7 @@ public class ChatService(
                 Id = Guid.NewGuid(),
                 UserId = conversation.Nurse.UserId,
                 Title = "Đề xuất ca chăm sóc mới",
-                Message = $"Bạn có đề xuất mới #{nextNum} cho dịch vụ {service.ServiceName} lúc {FormatTime(startUtc)}.",
+                Message = $"Bạn có đề xuất mới #{nextNum} gồm các dịch vụ ({serviceNames}) lúc {FormatTime(startUtc)}.",
                 Type = NotificationTypes.ProposalCreated,
                 ReferenceId = proposal.Id,
                 IsRead = false,
@@ -502,6 +548,39 @@ public class ChatService(
             };
 
             await bookings.AddAsync(booking, ct);
+
+            // Copy chi tiết các dịch vụ từ đề xuất sang ca trực chính thức
+            var propServices = await dbContext.BookingProposalServices
+                .Where(ps => ps.ProposalId == proposal.Id)
+                .ToListAsync(ct);
+
+            if (propServices.Count > 0)
+            {
+                foreach (var ps in propServices)
+                {
+                    dbContext.BookingServices.Add(new BookingServiceItem
+                    {
+                        Id = Guid.NewGuid(),
+                        BookingId = booking.Id,
+                        ServiceId = ps.ServiceId,
+                        Price = ps.Price,
+                        DurationMinutes = ps.DurationMinutes,
+                        CreatedAt = nowUtc
+                    });
+                }
+            }
+            else
+            {
+                dbContext.BookingServices.Add(new BookingServiceItem
+                {
+                    Id = Guid.NewGuid(),
+                    BookingId = booking.Id,
+                    ServiceId = proposal.ServiceId,
+                    Price = proposal.TotalPrice,
+                    DurationMinutes = proposal.Service?.DurationMinutes ?? 0,
+                    CreatedAt = nowUtc
+                });
+            }
 
             // Update proposal state
             proposal.Status = (int)ProposalStatus.Accepted;
@@ -787,10 +866,37 @@ public class ChatService(
         ProposalNumber = p.ProposalNumber,
         SenderUserId = p.SenderUserId,
         ServiceId = p.ServiceId,
-        ServiceName = p.Service.ServiceName,
-        ServiceDurationMinutes = p.Service.DurationMinutes,
+        ServiceName = p.Service?.ServiceName ?? string.Empty,
+        ServiceDurationMinutes = p.Service?.DurationMinutes ?? 0,
+        Services = p.ProposalServices != null && p.ProposalServices.Count > 0
+            ? p.ProposalServices.Select(s => new ProposalServiceItemDto
+            {
+                ServiceId = s.ServiceId,
+                ServiceName = s.Service?.ServiceName ?? string.Empty,
+                Price = s.Price,
+                DurationMinutes = s.DurationMinutes
+            }).ToList()
+            : new List<ProposalServiceItemDto>
+            {
+                new ProposalServiceItemDto
+                {
+                    ServiceId = p.ServiceId,
+                    ServiceName = p.Service?.ServiceName ?? string.Empty,
+                    Price = p.TotalPrice,
+                    DurationMinutes = p.Service?.DurationMinutes ?? 0
+                }
+            },
         RecipientId = p.RecipientId,
-        RecipientName = p.Recipient.FullName,
+        RecipientName = p.Recipient?.FullName ?? string.Empty,
+        RecipientDateOfBirth = p.Recipient?.DateOfBirth,
+        RecipientAge = p.Recipient?.DateOfBirth.HasValue == true
+            ? DateTime.UtcNow.Year - p.Recipient.DateOfBirth.Value.Year
+            : null,
+        RecipientGender = p.Recipient?.Gender,
+        RecipientGenderName = p.Recipient?.Gender switch { 1 => "Nam", 2 => "Nữ", _ => "Khác" },
+        RecipientMedicalHistory = p.Recipient?.MedicalHistory,
+        RecipientSpecialNotes = p.Recipient?.SpecialNotes,
+        RecipientAddress = p.Recipient?.Address,
         AddressId = p.AddressId,
         AddressSnapshot = p.AddressSnapshot,
         Latitude = p.LatitudeSnapshot,

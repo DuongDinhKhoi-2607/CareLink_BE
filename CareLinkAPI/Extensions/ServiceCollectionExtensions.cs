@@ -59,6 +59,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICareRecipientService, CareRecipientService>();
         services.AddScoped<INurseProfileService, NurseProfileService>();
         services.AddScoped<INurseVerificationService, NurseVerificationService>();
+        services.AddScoped<INursePricingService, NursePricingService>();
         services.AddScoped<INurseSearchService, NurseSearchService>();
         services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<IServiceCatalogService, ServiceCatalogService>();

@@ -25,6 +25,12 @@ public interface IBookingService
     /// <summary>Book-05: InProgress -> Completed (nurse, requires a submitted health record).</summary>
     Task<BookingResponse> FinishAsync(Guid userId, Guid bookingId, CancellationToken cancellationToken = default);
 
+    /// <summary>Nghiệm thu 2 chiều - Phía Điều dưỡng: Nộp báo cáo y tế và ký xác nhận xong ca.</summary>
+    Task<BookingResponse> NurseConfirmAsync(Guid userId, Guid bookingId, CancellationToken cancellationToken = default);
+
+    /// <summary>Nghiệm thu 2 chiều - Phía Gia đình: Kiểm tra báo cáo y tế, đánh giá và ký nghiệm thu hoàn tất.</summary>
+    Task<BookingResponse> CustomerConfirmAsync(Guid userId, Guid bookingId, CustomerConfirmBookingRequest? request = null, CancellationToken cancellationToken = default);
+
     /// <summary>Book-06: customer or nurse cancels; refund is computed by the cancellation policy.</summary>
     Task<BookingResponse> CancelAsync(Guid userId, Guid bookingId, CancelBookingRequest request, CancellationToken cancellationToken = default);
 

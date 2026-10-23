@@ -23,4 +23,10 @@ public partial class Service
     public DateTime CreatedAt { get; set; }
 
     public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();
+
+    public virtual ICollection<NurseServicePricing> NurseServicePricings { get; set; } = new List<NurseServicePricing>();
+
+    public virtual ICollection<BookingProposalService> BookingProposalServices { get; set; } = new List<BookingProposalService>();
+
+    public virtual ICollection<BookingServiceItem> BookingServices { get; set; } = new List<BookingServiceItem>();
 }

@@ -45,6 +45,10 @@ public partial class Booking
 
     public DateTime? CompletedAt { get; set; }
 
+    public DateTime? NurseConfirmedAt { get; set; }
+
+    public DateTime? CustomerConfirmedAt { get; set; }
+
     public DateTime? CanceledAt { get; set; }
 
     public DateTime CreatedAt { get; set; }
@@ -68,6 +72,8 @@ public partial class Booking
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
 
     public virtual Service Service { get; set; } = null!;
+
+    public virtual ICollection<BookingServiceItem> BookingServices { get; set; } = new List<BookingServiceItem>();
 
     public virtual ICollection<WalletTransaction> WalletTransactions { get; set; } = new List<WalletTransaction>();
 

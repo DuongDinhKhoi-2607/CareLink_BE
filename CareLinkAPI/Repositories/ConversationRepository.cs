@@ -122,6 +122,7 @@ public class ConversationRepository(CareLinkDbContext db) : IConversationReposit
     {
         var query = db.BookingProposals
             .Include(p => p.Service)
+            .Include(p => p.ProposalServices).ThenInclude(ps => ps.Service)
             .Include(p => p.Recipient)
             .Include(p => p.SenderUser)
             .Include(p => p.Conversation).ThenInclude(c => c.Customer).ThenInclude(cust => cust.User)
@@ -140,6 +141,7 @@ public class ConversationRepository(CareLinkDbContext db) : IConversationReposit
     {
         var query = db.BookingProposals
             .Include(p => p.Service)
+            .Include(p => p.ProposalServices).ThenInclude(ps => ps.Service)
             .Include(p => p.Recipient)
             .Include(p => p.SenderUser)
             .Include(p => p.Conversation).ThenInclude(c => c.Customer).ThenInclude(cust => cust.User)
@@ -158,6 +160,7 @@ public class ConversationRepository(CareLinkDbContext db) : IConversationReposit
     {
         return db.BookingProposals
             .Include(p => p.Service)
+            .Include(p => p.ProposalServices).ThenInclude(ps => ps.Service)
             .Include(p => p.Recipient)
             .Include(p => p.SenderUser)
             .AsNoTracking()

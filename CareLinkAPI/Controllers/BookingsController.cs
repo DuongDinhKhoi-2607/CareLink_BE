@@ -101,6 +101,32 @@ public class BookingsController(IBookingService bookingService) : ControllerBase
         return Ok(booking);
     }
 
+    /// <summary>Nghiệm thu 2 chiều: Điều dưỡng ký xác nhận hoàn thành sau khi nộp báo cáo y tế.</summary>
+    [HttpPut("{id:guid}/nurse-confirm")]
+    [ProducesResponseType(typeof(BookingResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<BookingResponse>> NurseConfirm(Guid id, CancellationToken cancellationToken)
+    {
+        var booking = await bookingService.NurseConfirmAsync(this.GetCurrentUserId(), id, cancellationToken);
+        return Ok(booking);
+    }
+
+    /// <summary>Nghiệm thu 2 chiều: Gia đình kiểm tra báo cáo y tế và ký xác nhận nghiệm thu hoàn tất.</summary>
+    [HttpPut("{id:guid}/customer-confirm")]
+    [ProducesResponseType(typeof(BookingResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<BookingResponse>> CustomerConfirm(
+        Guid id,
+        [FromBody] CustomerConfirmBookingRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var booking = await bookingService.CustomerConfirmAsync(this.GetCurrentUserId(), id, request, cancellationToken);
+        return Ok(booking);
+    }
+
     /// <summary>Book-06: customer or nurse cancels the booking; refund depends on the cancellation policy.</summary>
     [HttpPut("{id:guid}/cancel")]
     [ProducesResponseType(typeof(BookingResponse), StatusCodes.Status200OK)]

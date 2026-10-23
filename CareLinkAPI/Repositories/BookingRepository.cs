@@ -140,5 +140,6 @@ public class BookingRepository(CareLinkDbContext db) : IBookingRepository
             .Include(b => b.Nurse)
             .Include(b => b.Recipient)
             .Include(b => b.Service)
+            .Include(b => b.BookingServices).ThenInclude(bs => bs.Service)
             .Include(b => b.Payment);
 }

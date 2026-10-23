@@ -6,6 +6,7 @@ using CareLinkAPI.Common.Utils;
 using CareLinkAPI.DTOs.Nurses;
 using CareLinkAPI.Models;
 using CareLinkAPI.Repositories;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace CareLinkAPI.Services;
@@ -16,6 +17,7 @@ public class NurseSearchService(
     INurseUnavailabilityRepository unavailabilities,
     IBookingRepository bookings,
     IServiceRepository services,
+    CareLinkDbContext dbContext,
     IOptions<BookingOptions> options) : INurseSearchService
 {
     public async Task<PagedResult<NurseSearchItemResponse>> SearchAsync(
@@ -43,6 +45,43 @@ public class NurseSearchService(
         // Filter 1: Only nurses currently accepting bookings (Luồng 2 & 3)
         candidates = candidates.Where(n => n.IsAcceptingBookings).ToList();
 
+        // Điều kiện 1: Phải có Địa điểm / Địa bàn làm việc hiện tại
+        candidates = candidates.Where(n => !string.IsNullOrWhiteSpace(n.WorkDistrict)).ToList();
+
+        if (candidates.Count == 0)
+        {
+            return new PagedResult<NurseSearchItemResponse> { Items = new List<NurseSearchItemResponse>(), PageNumber = request.PageNumber, PageSize = request.PageSize, TotalCount = 0 };
+        }
+
+        var candidateIds = candidates.Select(n => n.Id).ToList();
+
+        // Điều kiện 2: Phải có Lịch rảnh trong tuần (Availability)
+        var nurseIdsWithAvailability = await dbContext.NurseAvailabilities
+            .Where(a => candidateIds.Contains(a.NurseId))
+            .Select(a => a.NurseId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        candidates = candidates.Where(n => nurseIdsWithAvailability.Contains(n.Id)).ToList();
+
+        // Điều kiện 3: Phải có Bảng giá dịch vụ
+        Dictionary<Guid, decimal> pricingMap = new();
+        if (request.ServiceId.HasValue)
+        {
+            pricingMap = await dbContext.NurseServicePricings
+                .Where(p => candidateIds.Contains(p.NurseId) && p.ServiceId == request.ServiceId.Value && p.IsOffered)
+                .ToDictionaryAsync(p => p.NurseId, p => p.CustomPrice, cancellationToken);
+            candidates = candidates.Where(n => pricingMap.ContainsKey(n.Id)).ToList();
+        }
+        else
+        {
+            var nursesWithAnyPricing = await dbContext.NurseServicePricings
+                .Where(p => candidateIds.Contains(p.NurseId) && p.IsOffered)
+                .Select(p => p.NurseId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            candidates = candidates.Where(n => nursesWithAnyPricing.Contains(n.Id)).ToList();
+        }
+
         // Filter 2: Clinical services requiring a license can only be done by Graduate Nurses with valid license (Luồng 1 & 3)
         if (service != null && service.RequiresLicense)
         {
@@ -59,7 +98,7 @@ public class NurseSearchService(
             candidates = await ExcludeUnavailableAsync(candidates, window.Value, cancellationToken);
         }
 
-        var ranked = Rank(candidates, request);
+        var ranked = Rank(candidates, request, pricingMap);
 
         var items = ranked
             .Skip((request.PageNumber - 1) * request.PageSize)
@@ -170,8 +209,11 @@ public class NurseSearchService(
             .ToList();
     }
 
-    /// <summary>Search-02: Haversine distance; nearest first, then best rated.</summary>
-    private static List<NurseSearchItemResponse> Rank(IEnumerable<Nurse> candidates, NurseSearchRequest request)
+    /// <summary>Search-02: Haversine distance; nearest first, then best rated. Nới lỏng GPS cho demo.</summary>
+    private static List<NurseSearchItemResponse> Rank(
+        IEnumerable<Nurse> candidates,
+        NurseSearchRequest request,
+        Dictionary<Guid, decimal> pricingMap)
     {
         var hasLocation = request.Latitude.HasValue && request.Longitude.HasValue;
         var results = new List<NurseSearchItemResponse>();
@@ -180,30 +222,21 @@ public class NurseSearchService(
         {
             double? distanceKm = null;
 
-            if (hasLocation)
+            if (hasLocation && nurse.Latitude.HasValue && nurse.Longitude.HasValue)
             {
-                if (nurse.Latitude is null || nurse.Longitude is null)
-                {
-                    continue; // cannot be matched geographically
-                }
-
                 distanceKm = GeoUtils.HaversineKm(
                     request.Latitude!.Value,
                     request.Longitude!.Value,
                     (double)nurse.Latitude.Value,
                     (double)nurse.Longitude.Value);
 
-                // Nurse only works within their own service radius.
-                if (distanceKm > nurse.ServiceRadiusKm)
-                {
-                    continue;
-                }
-
                 if (request.MaxDistanceKm.HasValue && distanceKm > request.MaxDistanceKm.Value)
                 {
                     continue;
                 }
             }
+
+            pricingMap.TryGetValue(nurse.Id, out var servicePrice);
 
             results.Add(new NurseSearchItemResponse
             {
@@ -219,7 +252,8 @@ public class NurseSearchService(
                 TotalReviews = nurse.TotalReviews,
                 PractitionerType = nurse.PractitionerType,
                 PractitionerTypeName = ((NursePractitionerType)nurse.PractitionerType).ToString(),
-                DistanceKm = distanceKm is null ? null : Math.Round(distanceKm.Value, 2)
+                DistanceKm = distanceKm is null ? null : Math.Round(distanceKm.Value, 2),
+                ServicePrice = servicePrice > 0 ? servicePrice : null
             });
         }
 

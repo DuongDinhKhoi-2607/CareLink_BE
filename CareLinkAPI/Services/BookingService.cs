@@ -270,7 +270,12 @@ public class BookingService(
                     $"Check-in is only allowed from {_options.CheckInEarlyMinutes} minutes before the scheduled start.");
             }
 
-            // GPS Check-in (Luồng 5: Soft-check GPS)
+            // GPS Check-in / Ghi nhận địa điểm hiện tại (Đơn giản hóa GPS)
+            if (!string.IsNullOrWhiteSpace(request?.CurrentLocationText))
+            {
+                booking.CheckInNote = $"Địa điểm check-in: {request.CurrentLocationText.Trim()}";
+            }
+
             if (request?.Latitude.HasValue == true && request?.Longitude.HasValue == true)
             {
                 booking.CheckInLatitude = request.Latitude.Value;
@@ -285,14 +290,13 @@ public class BookingService(
                         (double)booking.LongitudeSnapshot.Value);
 
                     var distanceMeters = (int)Math.Round(distanceKm * 1000);
-                    if (distanceKm > 0.5) // > 500m
-                    {
-                        booking.CheckInNote = $"Cảnh báo vị trí: Check-in lệch {distanceMeters:N0}m so với địa chỉ khách hàng.";
-                    }
-                    else
-                    {
-                        booking.CheckInNote = $"Vị trí hợp lệ: Cách {distanceMeters:N0}m so với địa chỉ khách hàng.";
-                    }
+                    var gpsNote = distanceKm > 0.5
+                        ? $"Cảnh báo vị trí: Check-in lệch {distanceMeters:N0}m so với địa chỉ khách hàng."
+                        : $"Vị trí hợp lệ: Cách {distanceMeters:N0}m so với địa chỉ khách hàng.";
+
+                    booking.CheckInNote = string.IsNullOrEmpty(booking.CheckInNote)
+                        ? gpsNote
+                        : $"{booking.CheckInNote} | {gpsNote}";
                 }
             }
 
@@ -309,42 +313,110 @@ public class BookingService(
         }, cancellationToken);
 
     public Task<BookingResponse> FinishAsync(Guid userId, Guid bookingId, CancellationToken cancellationToken = default) =>
+        NurseConfirmAsync(userId, bookingId, cancellationToken);
+
+    public Task<BookingResponse> NurseConfirmAsync(Guid userId, Guid bookingId, CancellationToken cancellationToken = default) =>
         ExecuteTransitionAsync(userId, bookingId, async (actor, booking, now) =>
         {
-            EnsureRole(actor, UserRole.Nurse, "Only the assigned nurse can finish a booking.");
-            BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Completed);
+            EnsureRole(actor, UserRole.Nurse, "Chỉ điều dưỡng được phân công mới có thể xác nhận xong ca.");
+
+            if (booking.Status != (int)BookingStatus.InProgress && booking.Status != (int)BookingStatus.Completed)
+            {
+                throw new ConflictException($"Ca chăm sóc đang ở trạng thái '{(BookingStatus)booking.Status}', không thể xác nhận.");
+            }
 
             if (!await healthRecords.ExistsForBookingAsync(booking.Id, cancellationToken))
             {
-                throw new BusinessRuleException("A health record must be submitted before finishing the booking.");
+                throw new BusinessRuleException("Điều dưỡng phải nộp Báo cáo y tế / Bệnh án trước khi xác nhận hoàn thành.");
             }
 
+            booking.NurseConfirmedAt = now;
+
+            // Nếu Gia đình đã xác nhận hoặc hoàn tất trực tiếp
+            if (booking.CustomerConfirmedAt.HasValue || booking.Status == (int)BookingStatus.Completed)
+            {
+                await CompleteBookingInternalAsync(booking, now, cancellationToken);
+            }
+            else
+            {
+                // Thông báo cho khách hàng vào xem báo cáo y tế và ký nghiệm thu
+                await NotifyAsync(
+                    booking.Customer.UserId,
+                    "Điều dưỡng đã gửi Báo cáo y tế & Ký hoàn thành",
+                    $"Điều dưỡng {booking.Nurse.FullName} đã hoàn thành công việc và gửi báo cáo y tế. Quý khách vui lòng kiểm tra và ký 'Xác nhận nghiệm thu'.",
+                    NotificationTypes.BookingCompleted,
+                    booking.Id,
+                    cancellationToken);
+            }
+        }, cancellationToken);
+
+    public Task<BookingResponse> CustomerConfirmAsync(
+        Guid userId,
+        Guid bookingId,
+        CustomerConfirmBookingRequest? request = null,
+        CancellationToken cancellationToken = default) =>
+        ExecuteTransitionAsync(userId, bookingId, async (actor, booking, now) =>
+        {
+            EnsureRole(actor, UserRole.Customer, "Chỉ khách hàng đặt lịch mới có thể xác nhận nghiệm thu ca chăm sóc.");
+
+            if (booking.Status != (int)BookingStatus.InProgress && booking.Status != (int)BookingStatus.Completed)
+            {
+                throw new ConflictException($"Ca chăm sóc đang ở trạng thái '{(BookingStatus)booking.Status}', không thể nghiệm thu.");
+            }
+
+            booking.CustomerConfirmedAt = now;
+
+            // Nếu điều dưỡng đã xác nhận -> Hoàn tất ca 100%
+            if (booking.NurseConfirmedAt.HasValue)
+            {
+                await CompleteBookingInternalAsync(booking, now, cancellationToken);
+            }
+            else
+            {
+                await NotifyAsync(
+                    booking.Nurse.UserId,
+                    "Khách hàng đã ký nghiệm thu ca chăm sóc",
+                    $"Gia đình đã ký nghiệm thu ca chăm sóc #{booking.Id}. Bạn hãy nộp báo cáo y tế để nhận tiền công.",
+                    NotificationTypes.BookingCompleted,
+                    booking.Id,
+                    cancellationToken);
+            }
+        }, cancellationToken);
+
+    private async Task CompleteBookingInternalAsync(Booking booking, DateTime now, CancellationToken cancellationToken)
+    {
+        if (booking.Status != (int)BookingStatus.Completed)
+        {
+            BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Completed);
             booking.Status = (int)BookingStatus.Completed;
             booking.CompletedAt = now;
 
-            var paidAmount = booking.Payment?.Amount ?? 0m;
-            var remainingDirect = Math.Max(0, booking.TotalPrice - paidAmount);
-            var paymentNotice = remainingDirect > 0
-                ? $" Quý khách vui lòng thanh toán trực tiếp {remainingDirect.ToString("N0", ViCulture)}đ cho điều dưỡng."
-                : string.Empty;
-
             await NotifyAsync(
                 booking.Customer.UserId,
-                "Ca chăm sóc đã hoàn thành",
-                $"Điều dưỡng {booking.Nurse.FullName} đã hoàn thành ca chăm sóc. Hãy xem báo cáo y tế và đánh giá dịch vụ.{paymentNotice}",
+                "Ca chăm sóc đã hoàn tất thành công",
+                $"Cả hai bên đã xác nhận hoàn thành ca chăm sóc #{booking.Id}. Cảm ơn quý khách đã tin tưởng CareLink!",
                 NotificationTypes.BookingCompleted,
                 booking.Id,
                 cancellationToken);
 
-            // Pay-03: Record completed booking earning in wallet
-            var platformFee = booking.Payment?.PlatformFee ?? 0m;
+            await NotifyAsync(
+                booking.Nurse.UserId,
+                "Ca chăm sóc đã hoàn tất thành công",
+                $"Ca chăm sóc #{booking.Id} đã hoàn tất nghiệm thu 2 bên. Tiền công {booking.TotalPrice:N0}đ đã được chuyển vào ví của bạn.",
+                NotificationTypes.BookingCompleted,
+                booking.Id,
+                cancellationToken);
+
+            // Settle booking earning in nurse wallet
+            var platformFee = booking.Payment?.PlatformFee ?? 60000m;
             await walletService.SettleBookingEarningAsync(
                 booking.NurseId,
                 booking.Id,
                 booking.TotalPrice,
                 platformFee,
                 cancellationToken);
-        }, cancellationToken);
+        }
+    }
 
     public Task<BookingResponse> CancelAsync(
         Guid userId,

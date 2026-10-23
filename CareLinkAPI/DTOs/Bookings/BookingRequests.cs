@@ -63,5 +63,14 @@ public class StartBookingRequest
 {
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
+
+    /// <summary>Địa chỉ hoặc địa điểm hiện tại điều dưỡng ghi nhận khi check-in.</summary>
+    public string? CurrentLocationText { get; set; }
+}
+
+/// <summary>Gia đình xác nhận hoàn tất ca chăm sóc (nghiệm thu 2 chiều).</summary>
+public class CustomerConfirmBookingRequest
+{
+    public string? Feedback { get; set; }
 }
 

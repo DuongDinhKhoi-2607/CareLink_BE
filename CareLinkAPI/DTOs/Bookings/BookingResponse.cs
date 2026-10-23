@@ -47,8 +47,27 @@ public class BookingResponse
     public DateTime CreatedAt { get; init; }
     public DateTime? AcceptedAt { get; init; }
     public DateTime? StartedAt { get; init; }
+    public DateTime? NurseConfirmedAt { get; init; }
+    public DateTime? CustomerConfirmedAt { get; init; }
     public DateTime? CompletedAt { get; init; }
     public DateTime? CanceledAt { get; init; }
+
+    /// <summary>Danh sách các dịch vụ trong ca chăm sóc (combo).</summary>
+    public List<BookingServiceItemDto> Services { get; init; } = new();
+
+    /// <summary>Phí nền tảng CareLink cố định (60.000 VNĐ).</summary>
+    public decimal PlatformFee { get; init; } = 60000;
+
+    /// <summary>Tổng tiền khách thanh toán qua PayOS Escrow (Giá dịch vụ + 60k phí sàn).</summary>
+    public decimal TotalPaymentAmount => TotalPrice + PlatformFee;
+}
+
+public class BookingServiceItemDto
+{
+    public Guid ServiceId { get; set; }
+    public string ServiceName { get; set; } = null!;
+    public decimal Price { get; set; }
+    public int DurationMinutes { get; set; }
 }
 
 public static class BookingMappings
@@ -69,7 +88,7 @@ public static class BookingMappings
         RecipientId = b.RecipientId,
         RecipientName = b.Recipient.FullName,
         ServiceId = b.ServiceId,
-        ServiceName = b.Service.ServiceName,
+        ServiceName = b.Service?.ServiceName ?? string.Empty,
         ScheduledStart = b.ScheduledStart,
         ScheduledEnd = b.ScheduledEnd,
         TotalPrice = b.TotalPrice,
@@ -86,7 +105,27 @@ public static class BookingMappings
         CreatedAt = b.CreatedAt,
         AcceptedAt = b.AcceptedAt,
         StartedAt = b.StartedAt,
+        NurseConfirmedAt = b.NurseConfirmedAt,
+        CustomerConfirmedAt = b.CustomerConfirmedAt,
         CompletedAt = b.CompletedAt,
-        CanceledAt = b.CanceledAt
+        CanceledAt = b.CanceledAt,
+        Services = b.BookingServices != null && b.BookingServices.Count > 0
+            ? b.BookingServices.Select(s => new BookingServiceItemDto
+            {
+                ServiceId = s.ServiceId,
+                ServiceName = s.Service?.ServiceName ?? string.Empty,
+                Price = s.Price,
+                DurationMinutes = s.DurationMinutes
+            }).ToList()
+            : new List<BookingServiceItemDto>
+            {
+                new BookingServiceItemDto
+                {
+                    ServiceId = b.ServiceId,
+                    ServiceName = b.Service?.ServiceName ?? string.Empty,
+                    Price = b.TotalPrice,
+                    DurationMinutes = b.Service?.DurationMinutes ?? 0
+                }
+            }
     };
 }

@@ -1,3 +1,4 @@
+using CareLinkAPI.Common.Enums;
 using CareLinkAPI.Common.Exceptions;
 using CareLinkAPI.DTOs.Recipients;
 using CareLinkAPI.Models;
@@ -20,12 +21,19 @@ public class CareRecipientService(
 
     public async Task<CareRecipientResponse> GetRecipientByIdAsync(Guid userId, Guid recipientId, CancellationToken cancellationToken = default)
     {
-        var customer = await GetOrCreateCustomerAsync(userId, cancellationToken);
+        var user = await userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundException("User not found.");
+
         var recipient = await recipientRepository.GetByIdAsync(recipientId, cancellationToken)
             ?? throw new NotFoundException("CareRecipient", recipientId);
 
-        if (recipient.CustomerId != customer.Id)
-            throw new ForbiddenException("You do not have permission to view this care recipient.");
+        // Điều dưỡng và Admin được quyền xem chi tiết hồ sơ bệnh án để phục vụ trao đổi và nhận ca
+        if (user.Role == (int)UserRole.Customer)
+        {
+            var customer = await GetOrCreateCustomerAsync(userId, cancellationToken);
+            if (recipient.CustomerId != customer.Id)
+                throw new ForbiddenException("You do not have permission to view this care recipient.");
+        }
 
         return MapToResponse(recipient);
     }

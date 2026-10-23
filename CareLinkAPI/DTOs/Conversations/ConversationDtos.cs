@@ -107,8 +107,11 @@ public class MessageResponse
 /// <summary>Body of POST /api/v1/conversations/{id}/proposals.</summary>
 public class CreateProposalRequest
 {
-    [Required]
-    public Guid ServiceId { get; set; }
+    /// <summary>Dịch vụ chính hoặc dịch vụ đơn lẻ (giữ để tương thích ngược).</summary>
+    public Guid? ServiceId { get; set; }
+
+    /// <summary>Danh sách các dịch vụ trong ca (cho phép combo nhiều dịch vụ cùng lúc).</summary>
+    public List<Guid>? ServiceIds { get; set; }
 
     [Required]
     public Guid RecipientId { get; set; }
@@ -120,8 +123,20 @@ public class CreateProposalRequest
     [Required]
     public DateTimeOffset ScheduledStart { get; set; }
 
+    /// <summary>Giá đề xuất mong muốn (deal). Nếu để trống, hệ thống sẽ tự cộng tổng giá các dịch vụ.</summary>
+    public decimal? ProposedTotalPrice { get; set; }
+
     [StringLength(1000)]
     public string? Notes { get; set; }
+}
+
+/// <summary>Dịch vụ chi tiết trong một đề xuất ca.</summary>
+public class ProposalServiceItemDto
+{
+    public Guid ServiceId { get; set; }
+    public string ServiceName { get; set; } = null!;
+    public decimal Price { get; set; }
+    public int DurationMinutes { get; set; }
 }
 
 /// <summary>Body of PUT /api/v1/conversations/{conversationId}/proposals/{proposalId}/accept.</summary>
@@ -150,8 +165,20 @@ public class BookingProposalResponse
     public string ServiceName { get; init; } = null!;
     public int ServiceDurationMinutes { get; init; }
 
+    /// <summary>Danh sách toàn bộ các dịch vụ trong gói combo của ca này.</summary>
+    public List<ProposalServiceItemDto> Services { get; init; } = new();
+
     public Guid RecipientId { get; init; }
     public string RecipientName { get; init; } = null!;
+
+    // Chi tiết hồ sơ bệnh án người bệnh cho điều dưỡng xem trực tiếp trong khung chat
+    public DateOnly? RecipientDateOfBirth { get; init; }
+    public int? RecipientAge { get; init; }
+    public int? RecipientGender { get; init; }
+    public string? RecipientGenderName { get; init; }
+    public string? RecipientMedicalHistory { get; init; }
+    public string? RecipientSpecialNotes { get; init; }
+    public string? RecipientAddress { get; init; }
 
     public Guid? AddressId { get; init; }
     public string AddressSnapshot { get; init; } = null!;
@@ -161,6 +188,8 @@ public class BookingProposalResponse
     public DateTime ScheduledStart { get; init; }
     public DateTime ScheduledEnd { get; init; }
     public decimal TotalPrice { get; init; }
+    public decimal PlatformFee { get; init; } = 60000;
+    public decimal TotalPaymentAmount => TotalPrice + PlatformFee;
     public string? Notes { get; init; }
 
     public ProposalStatus Status { get; init; }
