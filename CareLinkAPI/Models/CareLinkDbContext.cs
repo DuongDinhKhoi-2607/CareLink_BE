@@ -271,6 +271,15 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.Phone)
                 .HasColumnType("character varying")
                 .HasColumnName("phone");
+            entity.Property(e => e.EmergencyContactName)
+                .HasColumnType("character varying")
+                .HasColumnName("emergency_contact_name");
+            entity.Property(e => e.EmergencyContactPhone)
+                .HasColumnType("character varying")
+                .HasColumnName("emergency_contact_phone");
+            entity.Property(e => e.EmergencyContactRelation)
+                .HasColumnType("character varying")
+                .HasColumnName("emergency_contact_relation");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 
             entity.HasOne(d => d.User).WithOne(p => p.Customer)

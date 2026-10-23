@@ -22,6 +22,9 @@ public class CustomerProfileResponse
     public string? AvatarUrl { get; set; }
     public DateOnly? DateOfBirth { get; set; }
     public int? Gender { get; set; }
+    public string? EmergencyContactName { get; set; }
+    public string? EmergencyContactPhone { get; set; }
+    public string? EmergencyContactRelation { get; set; }
     public int AddressCount { get; set; }
     public int CareRecipientCount { get; set; }
 }

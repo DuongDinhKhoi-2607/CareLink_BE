@@ -13,4 +13,7 @@ public class UserInfo
     public string Email { get; set; } = null!;
     public string Role { get; set; } = null!;
     public bool IsActive { get; set; }
+    public string? FullName { get; set; }
+    public string? Phone { get; set; }
+    public string? AvatarUrl { get; set; }
 }

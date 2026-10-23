@@ -19,4 +19,14 @@ public class UpdateUserProfileRequest
     /// <summary>1=Male | 2=Female | 3=Other</summary>
     [Range(1, 3)]
     public int? Gender { get; set; }
+
+    [MaxLength(100)]
+    public string? EmergencyContactName { get; set; }
+
+    [Phone]
+    [MaxLength(20)]
+    public string? EmergencyContactPhone { get; set; }
+
+    [MaxLength(50)]
+    public string? EmergencyContactRelation { get; set; }
 }

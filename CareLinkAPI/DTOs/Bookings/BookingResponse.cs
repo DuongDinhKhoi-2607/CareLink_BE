@@ -13,6 +13,9 @@ public class BookingResponse
     public string CustomerName { get; init; } = null!;
     public string? CustomerAvatarUrl { get; init; }
     public string? CustomerPhone { get; init; }
+    public string? EmergencyContactName { get; init; }
+    public string? EmergencyContactPhone { get; init; }
+    public string? EmergencyContactRelation { get; init; }
 
     public Guid NurseId { get; init; }
     public string NurseName { get; init; } = null!;
@@ -81,6 +84,9 @@ public static class BookingMappings
         CustomerName = b.Customer.FullName,
         CustomerAvatarUrl = b.Customer.AvatarUrl,
         CustomerPhone = b.Customer.Phone,
+        EmergencyContactName = b.Customer.EmergencyContactName,
+        EmergencyContactPhone = b.Customer.EmergencyContactPhone,
+        EmergencyContactRelation = b.Customer.EmergencyContactRelation,
         NurseId = b.NurseId,
         NurseName = b.Nurse.FullName,
         NurseAvatarUrl = b.Nurse.AvatarUrl,

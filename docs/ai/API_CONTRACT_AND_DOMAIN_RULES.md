@@ -17,14 +17,9 @@
     - `Type = BookingEarning` (Số tiền `+earning` vào số dư khả dụng).
 - **Hiện trạng mã nguồn & Đồng bộ:**
   - Frontend đã cập nhật hiển thị 60.000 VNĐ.
-  - Backend đang có giá trị mặc định `50_000m` trong `PayOsOptions.cs`. Để áp dụng mức 60.000 VNĐ, cấu hình trong `appsettings.json`:
-    ```json
-    {
-      "PayOS": {
-        "PlatformFeePerBooking": 60000
-      }
-    }
-    ```
+  - Backend đã cấu hình mức 60.000 VNĐ trong `PayOsOptions.cs` (default `60_000m`) và `appsettings.json` (`"PlatformFeePerBooking": 60000`).
+  - **Lưu ý kiểm toán:** `BookingQueryService.cs` đang còn dòng hardcode `const decimal platformFeePerBooking = 50000m;` cần được refactor sang đọc từ `PayOsOptions` để nhất quán toàn hệ thống.
+  - **Bảo vệ tài chính (Quy tắc bất biến):** Backend phải là nơi xác định và xác thực số tiền thanh toán có thẩm quyền (`booking.TotalPrice`). Cảnh báo kiểm toán: `PaymentService.cs` và `PaymentsController.cs` đang cho phép client truyền `customAmount` ghi đè giá booking, cần xin phê duyệt để loại bỏ lỗ hổng này.
 
 ---
 
