@@ -614,12 +614,23 @@ public class NurseVerificationService(
         return nurse;
     }
 
+    private static string GetVietnameseDocumentTypeName(int documentType) => (NurseDocumentType)documentType switch
+    {
+        NurseDocumentType.CccdFront => "Căn cước công dân (Mặt trước)",
+        NurseDocumentType.CccdBack => "Căn cước công dân (Mặt sau)",
+        NurseDocumentType.Degree => "Bằng cấp y tế / Thẻ sinh viên",
+        NurseDocumentType.License => "Chứng chỉ hành nghề (CCHN)",
+        NurseDocumentType.Selfie => "Ảnh chân dung cầm CCCD",
+        NurseDocumentType.StudentCard => "Thẻ sinh viên y khoa / Giấy trường cấp",
+        _ => "Tài liệu xác minh"
+    };
+
     private static NurseDocumentResponse MapDocumentResponse(NurseDocument d) => new()
     {
         Id = d.Id,
         NurseId = d.NurseId,
         DocumentType = d.DocumentType,
-        DocumentTypeName = ((NurseDocumentType)d.DocumentType).ToString(),
+        DocumentTypeName = GetVietnameseDocumentTypeName(d.DocumentType),
         FileUrl = d.FileUrl,
         Status = d.Status,
         StatusName = ((DocumentStatus)d.Status).ToString(),

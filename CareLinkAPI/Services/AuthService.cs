@@ -63,13 +63,21 @@ public class AuthService : IAuthService
 
         _db.Users.Add(user);
 
+        var effectiveName = !string.IsNullOrWhiteSpace(request.FullName)
+            ? request.FullName.Trim()
+            : (request.Email?.Split('@')[0] ?? "user");
+        var effectivePhone = !string.IsNullOrWhiteSpace(request.Phone)
+            ? request.Phone.Trim()
+            : null;
+
         if (normalizedRole == (int)UserRole.Nurse)
         {
             var nurse = new Nurse
             {
                 Id = Guid.NewGuid(),
                 UserId = user.Id,
-                FullName = request.Email.Split('@')[0],
+                FullName = effectiveName,
+                Phone = effectivePhone,
                 Status = (int)NurseStatus.PendingVerification,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -82,7 +90,8 @@ public class AuthService : IAuthService
             {
                 Id = Guid.NewGuid(),
                 UserId = user.Id,
-                FullName = request.Email.Split('@')[0]
+                FullName = effectiveName,
+                Phone = effectivePhone
             };
             _db.Customers.Add(customer);
         }
@@ -373,6 +382,25 @@ public class AuthService : IAuthService
         user.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        string? displayName = null;
+        string? phone = null;
+        string? avatarUrl = null;
+
+        if (user.Role == (int)UserRole.Nurse)
+        {
+            var nurse = await _db.Nurses.FirstOrDefaultAsync(n => n.UserId == user.Id);
+            displayName = nurse?.FullName;
+            phone = nurse?.Phone;
+            avatarUrl = nurse?.AvatarUrl;
+        }
+        else if (user.Role == (int)UserRole.Customer || user.Role == 0)
+        {
+            var customer = await _db.Customers.FirstOrDefaultAsync(c => c.UserId == user.Id);
+            displayName = customer?.FullName;
+            phone = customer?.Phone;
+            avatarUrl = customer?.AvatarUrl;
+        }
+
         return new AuthResponse
         {
             AccessToken = accessToken,
@@ -382,7 +410,10 @@ public class AuthService : IAuthService
                 Id = user.Id,
                 Email = user.Email,
                 Role = RoleNames.GetValueOrDefault(user.Role, "Customer"),
-                IsActive = user.IsActive
+                IsActive = user.IsActive,
+                FullName = displayName ?? user.Email.Split('@')[0],
+                Phone = phone,
+                AvatarUrl = avatarUrl
             }
         };
     }

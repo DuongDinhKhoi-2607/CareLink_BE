@@ -19,6 +19,12 @@ public partial class Customer
 
     public int? Gender { get; set; }
 
+    public string? EmergencyContactName { get; set; }
+
+    public string? EmergencyContactPhone { get; set; }
+
+    public string? EmergencyContactRelation { get; set; }
+
     public virtual ICollection<Address> Addresses { get; set; } = new List<Address>();
 
     public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();

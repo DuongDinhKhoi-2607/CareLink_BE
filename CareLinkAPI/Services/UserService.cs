@@ -88,6 +88,15 @@ public class UserService(
             if (request.Gender.HasValue)
                 customer.Gender = request.Gender.Value;
 
+            if (request.EmergencyContactName != null)
+                customer.EmergencyContactName = request.EmergencyContactName.Trim();
+
+            if (request.EmergencyContactPhone != null)
+                customer.EmergencyContactPhone = request.EmergencyContactPhone.Trim();
+
+            if (request.EmergencyContactRelation != null)
+                customer.EmergencyContactRelation = request.EmergencyContactRelation.Trim();
+
             customerRepository.Update(customer);
         }
         else if (IsNurseRole(user.Role))
@@ -169,6 +178,9 @@ public class UserService(
                 AvatarUrl = user.Customer.AvatarUrl,
                 DateOfBirth = user.Customer.DateOfBirth,
                 Gender = user.Customer.Gender,
+                EmergencyContactName = user.Customer.EmergencyContactName,
+                EmergencyContactPhone = user.Customer.EmergencyContactPhone,
+                EmergencyContactRelation = user.Customer.EmergencyContactRelation,
                 AddressCount = user.Customer.Addresses?.Count ?? 0,
                 CareRecipientCount = user.Customer.CareRecipients?.Count ?? 0
             };
@@ -192,6 +204,8 @@ public class UserService(
                 WorkDistrict = user.Nurse.WorkDistrict,
                 AverageRating = user.Nurse.AverageRating,
                 TotalReviews = user.Nurse.TotalReviews,
+                PractitionerType = user.Nurse.PractitionerType,
+                PractitionerTypeName = ((NursePractitionerType)user.Nurse.PractitionerType).ToString(),
                 Status = user.Nurse.Status,
                 StatusName = ((NurseStatus)user.Nurse.Status).ToString()
             };

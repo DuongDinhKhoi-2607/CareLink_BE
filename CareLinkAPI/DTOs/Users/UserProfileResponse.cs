@@ -22,6 +22,9 @@ public class CustomerProfileResponse
     public string? AvatarUrl { get; set; }
     public DateOnly? DateOfBirth { get; set; }
     public int? Gender { get; set; }
+    public string? EmergencyContactName { get; set; }
+    public string? EmergencyContactPhone { get; set; }
+    public string? EmergencyContactRelation { get; set; }
     public int AddressCount { get; set; }
     public int CareRecipientCount { get; set; }
 }
@@ -42,6 +45,8 @@ public class NurseProfileSummaryResponse
     public string? WorkDistrict { get; set; }
     public decimal AverageRating { get; set; }
     public int TotalReviews { get; set; }
+    public int PractitionerType { get; set; } = 1;
+    public string PractitionerTypeName { get; set; } = "GraduateNurse";
     public int Status { get; set; }
     public string StatusName { get; set; } = null!;
 }
