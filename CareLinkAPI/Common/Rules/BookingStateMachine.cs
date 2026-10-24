@@ -37,9 +37,21 @@ public static class BookingStateMachine
         if (!CanTransition(from, to))
         {
             throw new ConflictException(
-                $"Booking in status '{from}' cannot be changed to '{to}'.");
+                $"Ca chăm sóc đang ở trạng thái '{FormatStatusVi(from)}', không thể chuyển sang '{FormatStatusVi(to)}'.");
         }
     }
+
+    public static string FormatStatusVi(BookingStatus status) => status switch
+    {
+        BookingStatus.PendingPayment => "Chờ thanh toán",
+        BookingStatus.PendingAcceptance => "Chờ điều dưỡng nhận",
+        BookingStatus.Accepted => "Đã tiếp nhận",
+        BookingStatus.InProgress => "Đang thực hiện",
+        BookingStatus.Completed => "Đã hoàn thành",
+        BookingStatus.Canceled => "Đã hủy",
+        BookingStatus.Disputed => "Đang khiếu nại",
+        _ => status.ToString()
+    };
 
     /// <summary>
     /// Specialized transition check for the negotiated chat proposal flow where the caregiver has already

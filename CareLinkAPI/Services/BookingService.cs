@@ -208,7 +208,7 @@ public class BookingService(
     public Task<BookingResponse> AcceptAsync(Guid userId, Guid bookingId, CancellationToken cancellationToken = default) =>
         ExecuteTransitionAsync(userId, bookingId, async (actor, booking, now) =>
         {
-            EnsureRole(actor, UserRole.Nurse, "Only the assigned nurse can accept a booking.");
+            EnsureRole(actor, UserRole.Nurse, "Chỉ điều dưỡng được phân công mới có thể tiếp nhận ca chăm sóc.");
             BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Accepted);
 
             booking.Status = (int)BookingStatus.Accepted;
@@ -230,14 +230,14 @@ public class BookingService(
         CancellationToken cancellationToken = default) =>
         ExecuteTransitionAsync(userId, bookingId, async (actor, booking, now) =>
         {
-            EnsureRole(actor, UserRole.Nurse, "Only the assigned nurse can reject a booking.");
+            EnsureRole(actor, UserRole.Nurse, "Chỉ điều dưỡng được phân công mới có thể từ chối ca chăm sóc.");
 
             var current = (BookingStatus)booking.Status;
             if (current != BookingStatus.PendingAcceptance)
             {
                 throw new ConflictException(
-                    $"Only bookings awaiting acceptance can be rejected (current status: '{current}'). " +
-                    "Use the cancel endpoint for accepted bookings.");
+                    $"Chỉ có thể từ chối ca đang chờ tiếp nhận (trạng thái hiện tại: '{BookingStateMachine.FormatStatusVi(current)}'). " +
+                    "Nếu ca đã được chấp nhận, vui lòng sử dụng chức năng hủy ca.");
             }
 
             var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Điều dưỡng từ chối ca làm" : request.Reason.Trim();
@@ -260,14 +260,15 @@ public class BookingService(
         CancellationToken cancellationToken = default) =>
         ExecuteTransitionAsync(userId, bookingId, async (actor, booking, now) =>
         {
-            EnsureRole(actor, UserRole.Nurse, "Only the assigned nurse can start a booking.");
+            EnsureRole(actor, UserRole.Nurse, "Chỉ điều dưỡng được phân công mới có thể bắt đầu ca chăm sóc.");
             BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.InProgress);
 
             var earliestCheckIn = booking.ScheduledStart.AddMinutes(-_options.CheckInEarlyMinutes);
             if (now < earliestCheckIn)
             {
+                var vnEarliest = FormatTime(earliestCheckIn);
                 throw new BusinessRuleException(
-                    $"Check-in is only allowed from {_options.CheckInEarlyMinutes} minutes before the scheduled start.");
+                    $"Chưa đến thời gian bắt đầu ca. Bạn chỉ có thể check-in trước giờ hẹn tối đa {_options.CheckInEarlyMinutes} phút (từ {vnEarliest}).");
             }
 
             // GPS Check-in / Ghi nhận địa điểm hiện tại (Đơn giản hóa GPS)
@@ -429,7 +430,7 @@ public class BookingService(
             {
                 UserRole.Customer => CanceledBy.Customer,
                 UserRole.Nurse => CanceledBy.Nurse,
-                _ => throw new ForbiddenException("Only the customer or the assigned nurse can cancel a booking.")
+                _ => throw new ForbiddenException("Chỉ khách hàng hoặc điều dưỡng của ca mới có quyền hủy lịch hẹn.")
             };
 
             var previous = (BookingStatus)booking.Status;
@@ -438,17 +439,45 @@ public class BookingService(
                 throw new ConflictException(
                     previous == BookingStatus.Canceled
                         ? "Lịch hẹn này đã ở trạng thái đã hủy trước đó."
-                        : $"Lịch hẹn ở trạng thái '{previous}' không thể hủy.");
+                        : $"Lịch hẹn ở trạng thái '{BookingStateMachine.FormatStatusVi(previous)}' không thể hủy.");
             }
 
             var reason = request.Reason.Trim();
             var refund = ApplyCancellation(booking, canceledBy, reason, now);
+            var who = canceledBy == CanceledBy.Customer ? "Khách hàng" : "Điều dưỡng";
+
+            // Đồng bộ proposal liên kết sang Expired để giao diện Chat reset sạch thông tin
+            var proposal = await conversations.GetProposalByBookingIdAsync(booking.Id, asNoTracking: false, cancellationToken);
+            if (proposal != null && proposal.Status != (int)ProposalStatus.Expired)
+            {
+                proposal.Status = (int)ProposalStatus.Expired;
+                proposal.UpdatedAt = now;
+
+                var systemMessage = new Message
+                {
+                    Id = Guid.NewGuid(),
+                    ConversationId = proposal.ConversationId,
+                    SenderUserId = booking.Customer.UserId,
+                    Content = $"{who} đã hủy ca chăm sóc #{booking.Id}. Lý do: {reason}. Thỏa thuận đặt lịch đã kết thúc.",
+                    Type = (int)MessageType.SystemNotification,
+                    ProposalId = proposal.Id,
+                    BookingId = booking.Id,
+                    CreatedAt = now
+                };
+                await conversations.AddMessageAsync(systemMessage, cancellationToken);
+
+                var conv = await conversations.GetByIdAsync(proposal.ConversationId, asNoTracking: false, cancellationToken);
+                if (conv != null)
+                {
+                    conv.LastMessageAt = now;
+                    conv.UpdatedAt = now;
+                }
+            }
 
             // Nobody else knows about a booking that was never paid, so there is nobody to notify.
             if (previous != BookingStatus.PendingPayment)
             {
                 var recipientUserId = canceledBy == CanceledBy.Customer ? booking.Nurse.UserId : booking.Customer.UserId;
-                var who = canceledBy == CanceledBy.Customer ? "Khách hàng" : "Điều dưỡng";
                 var refundText = canceledBy == CanceledBy.Nurse ? RefundSentence(refund) : string.Empty;
 
                 await NotifyAsync(
@@ -458,36 +487,6 @@ public class BookingService(
                     NotificationTypes.BookingCanceled,
                     booking.Id,
                     cancellationToken);
-            }
-            else
-            {
-                // If an unpaid proposal booking is explicitly canceled, sync proposal to Expired and notify conversation
-                var proposal = await conversations.GetProposalByBookingIdAsync(booking.Id, asNoTracking: false, cancellationToken);
-                if (proposal is { Status: (int)ProposalStatus.Accepted })
-                {
-                    proposal.Status = (int)ProposalStatus.Expired;
-                    proposal.UpdatedAt = now;
-
-                    var systemMessage = new Message
-                    {
-                        Id = Guid.NewGuid(),
-                        ConversationId = proposal.ConversationId,
-                        SenderUserId = booking.Customer.UserId,
-                        Content = "Lịch hẹn đã bị hủy trước khi thanh toán. Đề xuất chăm sóc đã kết thúc.",
-                        Type = (int)MessageType.SystemNotification,
-                        ProposalId = proposal.Id,
-                        BookingId = booking.Id,
-                        CreatedAt = now
-                    };
-                    await conversations.AddMessageAsync(systemMessage, cancellationToken);
-
-                    var conv = await conversations.GetByIdAsync(proposal.ConversationId, asNoTracking: false, cancellationToken);
-                    if (conv != null)
-                    {
-                        conv.LastMessageAt = now;
-                        conv.UpdatedAt = now;
-                    }
-                }
             }
         }, cancellationToken);
 
