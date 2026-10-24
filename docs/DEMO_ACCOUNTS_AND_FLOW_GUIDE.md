@@ -10,19 +10,29 @@
 ### 1. Phía Quản trị viên (Admin)
 | Email đăng nhập | Mật khẩu | Họ và tên | Vai trò | Mục đích sử dụng khi demo |
 | :--- | :---: | :--- | :---: | :--- |
-| **`admin@carelink.vn`** | **`123456`** | Quản trị viên CareLink | Admin | Demo màn hình Backoffice quản trị: Duyệt hồ sơ điều dưỡng, theo dõi doanh thu phí sàn 60k, quản trị tranh chấp. |
+| **`admin@carelink.vn`** | **`123456`** | Quản trị viên CareLink | Admin | Demo màn hình Backoffice: Dashboard GMV & Phí sàn 60k, Duyệt hồ sơ điều dưỡng, Xử lý khiếu nại (Dispute), Duyệt rút tiền ví (Payout). |
+
+**Dữ liệu Admin đã được nạp sẵn để hiển thị đồ thị & thống kê sống động:**
+* **Doanh thu & Đơn hàng:** 10 ca đa dạng trạng thái (`Completed`, `InProgress`, `Accepted`, `PendingPayment`, `Disputed`).
+* **Thẩm định hồ sơ:** 2 Điều dưỡng đang chờ duyệt (`pham.duy@carelink.vn` và `hang.vu@carelink.vn`) có đầy đủ ảnh chụp CCCD, bằng cấp.
+* **Xử lý khiếu nại (Disputes):** 1 Khiếu nại đang mở (`Open`) do điều dưỡng đến trễ để Admin trải nghiệm xử lý bồi hoàn.
+* **Yêu cầu rút tiền (Payouts):** 1 Yêu cầu rút 500.000 VNĐ về Vietcombank đang chờ Admin bấm phê duyệt.
 
 ---
 
-### 2. Phía Điều dưỡng viên (Nurses)
-| STT | Email đăng nhập | Mật khẩu | Họ và tên | Chuyên môn / Trình độ | Trạng thái hồ sơ |
+### 2. Phía Điều dưỡng viên (Nurses) — 8 Điều dưỡng Active & 2 Đang chờ duyệt
+| STT | Email đăng nhập | Mật khẩu | Họ và tên | Chuyên môn & Địa bàn | Trạng thái hồ sơ |
 | :---: | :--- | :---: | :--- | :--- | :---: |
-| **1** | **`lan.nguyen@carelink.vn`**<br>*(Tài khoản chính demo)* | **`123456`** | **Nguyễn Thị Mai Lan** | Cử nhân ĐH Y Dược TP.HCM (5 năm KN Lão khoa, Quận 1, Đánh giá **5.0 ⭐**, Đã có ví tiền) | **Đã duyệt (Active)** |
+| **1** | **`lan.nguyen@carelink.vn`**<br>*(Acc chính demo)* | **`123456`** | **Nguyễn Thị Mai Lan** | Cử nhân ĐH Y Dược TP.HCM (5 năm KN Lão khoa, Quận 1, **5.0 ⭐**, Có ví tiền) | **Đã duyệt (Active)** |
 | **2** | **`minh.tran@carelink.vn`** | **`123456`** | **Trần Văn Minh** | Cử nhân Ngoại khoa ĐH Y Phạm Ngọc Thạch (4 năm KN Chăm sóc sau mổ, Bình Thạnh, **4.9 ⭐**) | **Đã duyệt (Active)** |
-| **3** | **`thao.le@carelink.vn`** | **`123456`** | **Lê Thị Thảo** | Sinh viên Y đa khoa năm 5 ĐH Y Dược TP.HCM (`thaole.y5@ump.edu.vn`, Quận 5, **4.8 ⭐**) | **Đã xác minh email trường** |
-| **4** | **`quoctpkse182112@fpt.edu.vn`** | **`123456`** | **Trần Phạm Khánh Quốc** | Điều dưỡng viên chính thức CareLink (Quận 1, **5.0 ⭐**) | **Đã duyệt (Active)** |
-| **5** | **`vynntse183571@fpt.edu.vn`** | **`123456`** | **Nguyễn Ngọc Tường Vy** | Sinh viên Y khoa CareLink (Quận 1, **5.0 ⭐**) | **Đã duyệt (Active)** |
-| **6** | **`pham.duy@carelink.vn`** | **`123456`** | **Phạm Quốc Duy** | Cử nhân Cao đẳng Y tế Bạch Mai (3 năm KN hồi sức cấp cứu). Đầy đủ ảnh CCCD, bằng cấp. | **Chờ duyệt (Pending)**<br>*(Dùng để Admin bấm duyệt)* |
+| **3** | **`thao.le@carelink.vn`** | **`123456`** | **Lê Thị Thảo** | Sinh viên Y đa khoa năm 5 ĐH Y Dược TP.HCM (Quận 5, **4.8 ⭐**) | **Đã xác minh email trường** |
+| **4** | **`thao.dang@carelink.vn`** | **`123456`** | **Đặng Thị Thu Thảo** | Cử nhân Sản Nhi BV Từ Dũ (6 năm KN Chăm sóc mẹ & bé sơ sinh, Quận 7, **5.0 ⭐**) | **Đã duyệt (Active)** |
+| **5** | **`nam.vu@carelink.vn`** | **`123456`** | **Vũ Hoàng Nam** | Sinh viên Điều dưỡng năm 4 ĐH Y Phạm Ngọc Thạch (Quận 10, **4.7 ⭐**) | **Đã duyệt (Active)** |
+| **6** | **`chi.hoang@carelink.vn`** | **`123456`** | **Hoàng Kim Chi** | Y tá thực hành 7 năm kinh nghiệm (Tiêm truyền tại nhà, Tân Bình, **4.9 ⭐**) | **Đã duyệt (Active)** |
+| **7** | **`quoctpkse182112@fpt.edu.vn`** | **`123456`** | **Trần Phạm Khánh Quốc** | Cử nhân Điều dưỡng CareLink (Quận 1, **5.0 ⭐**) | **Đã duyệt (Active)** |
+| **8** | **`vynntse183571@fpt.edu.vn`** | **`123456`** | **Nguyễn Ngọc Tường Vy** | Sinh viên Y khoa CareLink (Quận 1, **5.0 ⭐**) | **Đã duyệt (Active)** |
+| **9** | **`pham.duy@carelink.vn`** | **`123456`** | **Phạm Quốc Duy** | Cử nhân Cao đẳng Y tế Bạch Mai (Gò Vấp). Đầy đủ CCCD, Bằng cấp. | **Chờ duyệt (Pending)**<br>*(Để Admin bấm duyệt)* |
+| **10** | **`hang.vu@carelink.vn`** | **`123456`** | **Vũ Thị Hằng** | Cử nhân Điều dưỡng ĐH Y Dược (Quận 3). Hồ sơ mới nộp. | **Chờ duyệt (Pending)**<br>*(Để Admin bấm duyệt)* |
 
 ---
 
