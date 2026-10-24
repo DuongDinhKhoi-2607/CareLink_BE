@@ -76,6 +76,7 @@ public class PaymentService(
         var resolvedCancelUrl = baseCancelUrl.Contains('?') ? $"{baseCancelUrl}&bookingId={booking.Id}" : $"{baseCancelUrl}?bookingId={booking.Id}";
 
         // Determine charge amount: prioritize amount requested by FE
+        var platformFee = _payOs.PlatformFeePerBooking > 0 ? _payOs.PlatformFeePerBooking : 60_000m;
         decimal chargeAmount;
         if (customAmount.HasValue && customAmount.Value > 0)
         {
@@ -83,11 +84,12 @@ public class PaymentService(
         }
         else if (booking.TotalPrice > 0)
         {
-            chargeAmount = booking.TotalPrice;
+            // Giá dịch vụ + Phí sàn hệ thống CareLink (ADR-002)
+            chargeAmount = booking.TotalPrice + platformFee;
         }
         else
         {
-            chargeAmount = _payOs.PlatformFeePerBooking > 0 ? _payOs.PlatformFeePerBooking : 60_000m;
+            chargeAmount = platformFee;
         }
 
         if (chargeAmount < 1000m)
@@ -183,7 +185,7 @@ public class PaymentService(
         }
 
         payment.Amount = chargeAmount;
-        payment.PlatformFee = chargeAmount;
+        payment.PlatformFee = platformFee;
         payment.PaymentMethod = (int)PaymentMethod.PayOS;
         payment.Status = (int)PaymentStatus.Pending;
         payment.PaymentCode = orderCode.ToString(CultureInfo.InvariantCulture);
