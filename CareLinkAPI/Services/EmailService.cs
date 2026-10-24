@@ -1,23 +1,31 @@
 using System.Net;
 using System.Net.Mail;
+using System.Text;
+using System.Text.Json;
 
 namespace CareLinkAPI.Services;
 
 /// <summary>
-/// Triển khai dịch vụ gửi email với cơ chế fallback thông minh:
+/// Triển khai dịch vụ gửi email với cơ chế đa tầng linh hoạt:
 /// 1. Luôn in mã OTP nổi bật ra Console/Terminal để phục vụ kiểm thử và tài khoản test trong database.
-/// 2. Nếu cấu hình SMTP tồn tại, gửi email thật kèm template HTML chuẩn nhận diện y tế CareLink.
-/// 3. Nếu gửi email thật gặp lỗi hoặc email test không tồn tại ngoài đời, bắt lỗi an toàn và hướng dẫn lấy OTP từ console.
+/// 2. Ưu tiên 1 (Cloud & Production): Gửi qua Resend HTTP REST API (Port 443 HTTPS), hoàn toàn không bị chặn trên Render Free hay AWS/Docker.
+/// 3. Ưu tiên 2 (Fallback): Gửi qua giao thức SMTP truyền thống nếu có cấu hình Smtp:* và môi trường cho phép.
+/// 4. Nếu gửi email thất bại hoặc chưa cấu hình, bắt lỗi an toàn và hướng dẫn lấy OTP từ console/logs.
 /// </summary>
 public class EmailService : IEmailService
 {
     private readonly IConfiguration _config;
     private readonly ILogger<EmailService> _logger;
+    private readonly IHttpClientFactory? _httpClientFactory;
 
-    public EmailService(IConfiguration config, ILogger<EmailService> logger)
+    public EmailService(
+        IConfiguration config,
+        ILogger<EmailService> logger,
+        IHttpClientFactory? httpClientFactory = null)
     {
         _config = config;
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task SendPasswordResetOtpAsync(string toEmail, string otp, CancellationToken ct = default)
@@ -25,7 +33,124 @@ public class EmailService : IEmailService
         // 1. Luôn in nổi bật ra Console Terminal (cho cả email test lẫn email thật)
         PrintOtpToConsole(toEmail, otp);
 
-        // 2. Kiểm tra cấu hình SMTP
+        var subject = "🔐 [CareLink] Mã xác thực đặt lại mật khẩu của bạn";
+        var htmlBody = BuildResetPasswordHtml(toEmail, otp);
+
+        await SendEmailInternalAsync(toEmail, subject, htmlBody, otp, ct);
+    }
+
+    public async Task SendStudentVerificationOtpAsync(string toStudentEmail, string otp, CancellationToken ct = default)
+    {
+        // 1. Luôn in nổi bật ra Console Terminal
+        PrintStudentOtpToConsole(toStudentEmail, otp);
+
+        var subject = "🎓 [CareLink] Mã xác thực danh tính Sinh viên Y khoa (.edu)";
+        var htmlBody = BuildStudentVerificationHtml(toStudentEmail, otp);
+
+        await SendEmailInternalAsync(toStudentEmail, subject, htmlBody, otp, ct);
+    }
+
+    private async Task SendEmailInternalAsync(
+        string toEmail,
+        string subject,
+        string htmlBody,
+        string otp,
+        CancellationToken ct)
+    {
+        // 1. Ưu tiên 1: Gửi qua Resend HTTP REST API (Port 443 HTTPS - tương thích 100% với Render Cloud)
+        var resendApiKey = _config["Resend:ApiKey"];
+        if (!string.IsNullOrWhiteSpace(resendApiKey))
+        {
+            var resendSuccess = await TrySendViaResendAsync(toEmail, subject, htmlBody, resendApiKey.Trim(), ct);
+            if (resendSuccess)
+            {
+                return;
+            }
+        }
+
+        // 2. Ưu tiên 2: Fallback qua SMTP truyền thống (cho localhost hoặc server mở port 587)
+        var smtpHost = _config["Smtp:Host"];
+        var smtpUser = _config["Smtp:UserName"];
+        if (!string.IsNullOrWhiteSpace(smtpHost) && !string.IsNullOrWhiteSpace(smtpUser))
+        {
+            var smtpSuccess = await TrySendViaSmtpAsync(toEmail, subject, htmlBody, otp, ct);
+            if (smtpSuccess)
+            {
+                return;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(resendApiKey) && string.IsNullOrWhiteSpace(smtpHost))
+        {
+            _logger.LogInformation(
+                "ℹ️ [CareLink Email] Chưa cấu hình Resend API Key hoặc SMTP. Mã OTP console cho {Email} -> OTP: {Otp}",
+                toEmail, otp);
+        }
+    }
+
+    private async Task<bool> TrySendViaResendAsync(
+        string toEmail,
+        string subject,
+        string htmlBody,
+        string apiKey,
+        CancellationToken ct)
+    {
+        try
+        {
+            var senderEmail = _config["Resend:SenderEmail"] ?? "onboarding@resend.dev";
+            var senderName = _config["Resend:SenderName"] ?? "CareLink Medical Care";
+            var from = string.IsNullOrWhiteSpace(senderName)
+                ? senderEmail
+                : $"{senderName} <{senderEmail}>";
+
+            var client = _httpClientFactory?.CreateClient() ?? new HttpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.resend.com/emails");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+            var payload = new
+            {
+                from,
+                to = new[] { toEmail },
+                subject,
+                html = htmlBody
+            };
+
+            var json = JsonSerializer.Serialize(payload);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            using var response = await client.SendAsync(request, ct);
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation(
+                    "✅ [CareLink Email/Resend] Đã gửi email chứa mã OTP thành công đến {Email} qua Resend HTTP API.",
+                    toEmail);
+                return true;
+            }
+
+            _logger.LogWarning(
+                "⚠️ [CareLink Email/Resend] Resend API trả về HTTP {StatusCode}: {ResponseBody}. Sẽ thử fallback qua SMTP nếu có.",
+                (int)response.StatusCode, responseBody);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "⚠️ [CareLink Email/Resend] Không thể kết nối tới Resend API cho {Email}. Sẽ thử fallback qua SMTP nếu có.",
+                toEmail);
+            return false;
+        }
+    }
+
+    private async Task<bool> TrySendViaSmtpAsync(
+        string toEmail,
+        string subject,
+        string htmlBody,
+        string otp,
+        CancellationToken ct)
+    {
         var host = _config["Smtp:Host"];
         var port = _config.GetValue<int>("Smtp:Port", 587);
         var enableSsl = _config.GetValue<bool>("Smtp:EnableSsl", true);
@@ -34,22 +159,13 @@ public class EmailService : IEmailService
         var senderEmail = _config["Smtp:SenderEmail"] ?? "no-reply@carelink.vn";
         var senderName = _config["Smtp:SenderName"] ?? "CareLink Medical Care";
 
-        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(userName))
-        {
-            _logger.LogInformation(
-                "ℹ️ [CareLink Auth] SMTP chưa được cấu hình. Sử dụng mã OTP console cho tài khoản: {Email} -> OTP: {Otp}",
-                toEmail, otp);
-            return;
-        }
-
-        // 3. Nếu có cấu hình SMTP, tiến hành gửi email thật
         try
         {
             using var message = new MailMessage
             {
                 From = new MailAddress(senderEmail, senderName),
-                Subject = "🔐 [CareLink] Mã xác thực đặt lại mật khẩu của bạn",
-                Body = BuildResetPasswordHtml(toEmail, otp),
+                Subject = subject,
+                Body = htmlBody,
                 IsBodyHtml = true
             };
             message.To.Add(toEmail);
@@ -62,67 +178,16 @@ public class EmailService : IEmailService
             };
 
             await client.SendMailAsync(message, ct);
-            _logger.LogInformation("✅ [CareLink Auth] Đã gửi email chứa mã OTP thành công đến {Email}", toEmail);
+            _logger.LogInformation("✅ [CareLink Email/SMTP] Đã gửi email chứa mã OTP thành công đến {Email}", toEmail);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(
                 ex,
-                "⚠️ [CareLink Auth] Không thể gửi email thật đến {Email}. Vui lòng sử dụng mã OTP hiển thị trên console: {Otp}",
+                "⚠️ [CareLink Email/SMTP] Không thể gửi email thật qua SMTP đến {Email}. Vui lòng sử dụng mã OTP hiển thị trên console: {Otp}",
                 toEmail, otp);
-        }
-    }
-
-    public async Task SendStudentVerificationOtpAsync(string toStudentEmail, string otp, CancellationToken ct = default)
-    {
-        // 1. Luôn in nổi bật ra Console Terminal
-        PrintStudentOtpToConsole(toStudentEmail, otp);
-
-        // 2. Kiểm tra cấu hình SMTP
-        var host = _config["Smtp:Host"];
-        var port = _config.GetValue<int>("Smtp:Port", 587);
-        var enableSsl = _config.GetValue<bool>("Smtp:EnableSsl", true);
-        var userName = _config["Smtp:UserName"];
-        var password = _config["Smtp:Password"];
-        var senderEmail = _config["Smtp:SenderEmail"] ?? "no-reply@carelink.vn";
-        var senderName = _config["Smtp:SenderName"] ?? "CareLink Student Verification";
-
-        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(userName))
-        {
-            _logger.LogInformation(
-                "ℹ️ [CareLink Verification] SMTP chưa được cấu hình. Sử dụng mã OTP console cho email sinh viên: {Email} -> OTP: {Otp}",
-                toStudentEmail, otp);
-            return;
-        }
-
-        // 3. Nếu có cấu hình SMTP, gửi email thật
-        try
-        {
-            using var message = new MailMessage
-            {
-                From = new MailAddress(senderEmail, senderName),
-                Subject = "🎓 [CareLink] Mã xác thực danh tính Sinh viên Y khoa (.edu)",
-                Body = BuildStudentVerificationHtml(toStudentEmail, otp),
-                IsBodyHtml = true
-            };
-            message.To.Add(toStudentEmail);
-
-            using var client = new SmtpClient(host, port)
-            {
-                EnableSsl = enableSsl,
-                Credentials = new NetworkCredential(userName, password),
-                Timeout = 10000
-            };
-
-            await client.SendMailAsync(message, ct);
-            _logger.LogInformation("✅ [CareLink Verification] Đã gửi mã OTP xác thực sinh viên đến {Email}", toStudentEmail);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "⚠️ [CareLink Verification] Không thể gửi email thật đến {Email}. Vui lòng sử dụng mã OTP hiển thị trên console: {Otp}",
-                toStudentEmail, otp);
+            return false;
         }
     }
 
