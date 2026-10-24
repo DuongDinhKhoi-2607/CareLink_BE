@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using System.Text.Json;
 using CareLinkAPI.Common.Constants;
 using CareLinkAPI.Common.Enums;
 using CareLinkAPI.Common.Exceptions;
@@ -245,19 +246,21 @@ public class PaymentService(
                             }
                             logger.LogInformation("Payment for booking {BookingId} (order {OrderCode}) confirmed PAID directly via PayOS API (Amount: {Amount}).",
                                 bookingId, orderCode, payment.Amount);
-                            await FulfillPaidPaymentAsync(payment, payOsInfo.Id, "PAYOS_DIRECT_SYNC", cancellationToken);
+                            var syncPayload = JsonSerializer.Serialize(new { source = "PAYOS_DIRECT_SYNC", status = payOsInfo.Status.ToString(), amountPaid = payOsInfo.AmountPaid });
+                            await FulfillPaidPaymentAsync(payment, payOsInfo.Id, syncPayload, cancellationToken);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    logger.LogDebug(ex, "Could not fetch PayOS status for order {OrderCode}", orderCode);
+                    logger.LogWarning(ex, "Could not fetch PayOS status for order {OrderCode}", orderCode);
                 }
             }
 
             if (payment.Status == (int)PaymentStatus.Pending && payment.GatewayTransactionId != null && payment.GatewayTransactionId.StartsWith("sandbox_"))
             {
-                await FulfillPaidPaymentAsync(payment, payment.GatewayTransactionId, "SANDBOX_MOCK_PAYLOAD", cancellationToken);
+                var sandboxPayload = JsonSerializer.Serialize(new { source = "SANDBOX_MOCK_PAYLOAD" });
+                await FulfillPaidPaymentAsync(payment, payment.GatewayTransactionId, sandboxPayload, cancellationToken);
             }
         }
 
@@ -334,7 +337,15 @@ public class PaymentService(
         {
             payment.GatewayTransactionId = gatewayReference;
         }
-        payment.WebhookPayload = rawPayload;
+
+        if (string.IsNullOrWhiteSpace(rawPayload) || (!rawPayload.TrimStart().StartsWith('{') && !rawPayload.TrimStart().StartsWith('[')))
+        {
+            payment.WebhookPayload = JsonSerializer.Serialize(new { source = rawPayload ?? "PAID", confirmedAt = now });
+        }
+        else
+        {
+            payment.WebhookPayload = rawPayload;
+        }
 
         if (booking.Status == (int)BookingStatus.PendingPayment)
         {
@@ -345,6 +356,7 @@ public class PaymentService(
                 booking.ScheduledEnd,
                 pendingPaymentCutoff,
                 [booking.NurseId],
+                booking.Id,
                 cancellationToken);
 
             if (busy.Contains(booking.NurseId))
@@ -363,6 +375,7 @@ public class PaymentService(
                     NotificationTypes.BookingCanceled,
                     booking.Id,
                     cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
                 return;
             }
 

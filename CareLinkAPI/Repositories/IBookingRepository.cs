@@ -42,6 +42,14 @@ public interface IBookingRepository
         IReadOnlyCollection<Guid> candidateNurseIds,
         CancellationToken cancellationToken = default);
 
+    Task<HashSet<Guid>> GetBusyNurseIdsAsync(
+        DateTime startUtc,
+        DateTime endUtc,
+        DateTime pendingPaymentCutoffUtc,
+        IReadOnlyCollection<Guid> candidateNurseIds,
+        Guid? excludeBookingId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Book-07: PendingAcceptance bookings whose payment was made on or before <paramref name="paidBeforeUtc"/>
     /// (tracked, with Customer, Nurse and Payment loaded).
