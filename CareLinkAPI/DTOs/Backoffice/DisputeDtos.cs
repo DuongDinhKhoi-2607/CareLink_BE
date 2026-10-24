@@ -43,4 +43,20 @@ public class DisputeResponseDto
     public Guid? ResolvedBy { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ResolvedAt { get; set; }
+
+    // ── Thông tin chi tiết khách hàng & điều dưỡng & ca trực ──
+    public string? CustomerName { get; set; }
+    public string? CustomerPhone { get; set; }
+    public string? CustomerAvatar { get; set; }
+    public string? RecipientName { get; set; }
+    public string? BookingAddress { get; set; }
+
+    public string? NurseName { get; set; }
+    public string? NursePhone { get; set; }
+    public string? NurseAvatar { get; set; }
+    public string? NurseTitle { get; set; }
+
+    public string? ServiceName { get; set; }
+    public decimal? TotalAmount { get; set; }
+    public DateTime? ScheduledStart { get; set; }
 }

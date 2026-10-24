@@ -31,6 +31,17 @@ public class ReviewsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
+    /// <summary>Lấy đánh giá 2 chiều (Khách hàng và Điều dưỡng) của một ca chăm sóc cụ thể</summary>
+    [Authorize]
+    [HttpGet("api/v1/bookings/{bookingId:guid}/reviews")]
+    public async Task<ActionResult<BookingReviewsResponseDto>> GetBookingReviews(
+        [FromRoute] Guid bookingId,
+        CancellationToken ct)
+    {
+        var result = await _reviewService.GetBookingReviewsAsync(bookingId, ct);
+        return Ok(result);
+    }
+
     /// <summary>
     /// Xem chi tiết đánh giá theo ID
     /// </summary>

@@ -95,6 +95,9 @@ public class ReviewResponseDto
     public Guid ReviewerId { get; set; }
     public Guid RevieweeId { get; set; }
     public int ReviewerRole { get; set; }
+    public string? ReviewerName { get; set; }
+    public string? ReviewerAvatarUrl { get; set; }
+    public string? RevieweeName { get; set; }
     public decimal OverallRating { get; set; }
     public string? Comment { get; set; }
 
@@ -110,6 +113,15 @@ public class ReviewResponseDto
     public int? PaymentRating { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+public class BookingReviewsResponseDto
+{
+    public Guid BookingId { get; set; }
+    public ReviewResponseDto? CustomerReview { get; set; }
+    public ReviewResponseDto? NurseReview { get; set; }
+    public bool HasCustomerReviewed => CustomerReview != null;
+    public bool HasNurseReviewed => NurseReview != null;
 }
 
 public class NurseRatingSummaryDto

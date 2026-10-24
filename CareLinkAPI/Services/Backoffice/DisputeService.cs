@@ -158,7 +158,26 @@ public class DisputeService : IDisputeService
         if (!_currentUserService.IsAdmin)
         {
             var booking = await _bookingRepository.GetByIdAsync(dispute.BookingId, asNoTracking: true, ct);
-            if (booking != null && booking.Customer.UserId != currentUserId)
+            if (booking != null && booking.Customer.UserId != currentUserId && booking.Nurse.UserId != currentUserId)
+            {
+                throw new ForbiddenException("Bạn không có quyền truy cập thông tin khiếu nại này.");
+            }
+        }
+
+        return MapToResponseDto(dispute);
+    }
+
+    public async Task<DisputeResponseDto> GetDisputeByBookingIdAsync(Guid bookingId, CancellationToken ct = default)
+    {
+        var currentUserId = _currentUserService.GetRequiredUserId();
+
+        var dispute = await _disputeRepository.GetLatestDisputeByBookingIdAsync(bookingId, ct)
+            ?? throw new NotFoundException("Dispute for booking", bookingId);
+
+        if (!_currentUserService.IsAdmin)
+        {
+            var booking = await _bookingRepository.GetByIdAsync(bookingId, asNoTracking: true, ct);
+            if (booking != null && booking.Customer.UserId != currentUserId && booking.Nurse.UserId != currentUserId)
             {
                 throw new ForbiddenException("Bạn không có quyền truy cập thông tin khiếu nại này.");
             }
@@ -194,6 +213,20 @@ public class DisputeService : IDisputeService
         ResolutionNote = d.ResolutionNote,
         ResolvedBy = d.ResolvedBy,
         ResolvedAt = d.ResolvedAt,
-        CreatedAt = d.CreatedAt
+        CreatedAt = d.CreatedAt,
+        CustomerName = d.Customer?.FullName ?? d.Booking?.Customer?.FullName,
+        CustomerPhone = d.Customer?.Phone ?? d.Booking?.Customer?.Phone,
+        CustomerAvatar = d.Customer?.AvatarUrl ?? d.Booking?.Customer?.AvatarUrl,
+        RecipientName = d.Booking?.Recipient?.FullName,
+        BookingAddress = d.Booking?.AddressSnapshot,
+        NurseName = d.Booking?.Nurse?.FullName,
+        NursePhone = d.Booking?.Nurse?.Phone,
+        NurseAvatar = d.Booking?.Nurse?.AvatarUrl,
+        NurseTitle = d.Booking?.Nurse != null
+            ? (d.Booking.Nurse.PractitionerType == 1 ? "Cử nhân Điều dưỡng" : "Sinh viên Y khoa")
+            : "Điều dưỡng CareLink",
+        ServiceName = d.Booking?.Service?.ServiceName,
+        TotalAmount = d.Booking?.TotalPrice,
+        ScheduledStart = d.Booking?.ScheduledStart
     };
 }

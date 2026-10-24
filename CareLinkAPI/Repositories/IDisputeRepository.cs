@@ -7,6 +7,7 @@ public interface IDisputeRepository
 {
     Task<Dispute?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<Dispute?> GetActiveDisputeByBookingIdAsync(Guid bookingId, CancellationToken ct = default);
+    Task<Dispute?> GetLatestDisputeByBookingIdAsync(Guid bookingId, CancellationToken ct = default);
     Task<PagedResult<Dispute>> GetAllPagedAsync(int pageNumber, int pageSize, int? status, CancellationToken ct = default);
     Task<int> CountByStatusAsync(int status, CancellationToken ct = default);
     Task<int> CountTotalAsync(CancellationToken ct = default);

@@ -212,6 +212,20 @@ public class ReviewService : IReviewService
         return MapToResponseDto(review);
     }
 
+    public async Task<BookingReviewsResponseDto> GetBookingReviewsAsync(Guid bookingId, CancellationToken ct = default)
+    {
+        var reviews = await _reviewRepository.GetReviewsByBookingIdAsync(bookingId, ct);
+        var customerReview = reviews.FirstOrDefault(r => r.ReviewerRole == (int)UserRole.Customer);
+        var nurseReview = reviews.FirstOrDefault(r => r.ReviewerRole == (int)UserRole.Nurse);
+
+        return new BookingReviewsResponseDto
+        {
+            BookingId = bookingId,
+            CustomerReview = customerReview != null ? MapToResponseDto(customerReview) : null,
+            NurseReview = nurseReview != null ? MapToResponseDto(nurseReview) : null
+        };
+    }
+
     public async Task<PagedResult<ReviewResponseDto>> GetReviewsForUserAsync(Guid userId, int pageNumber, int pageSize, CancellationToken ct = default)
     {
         var paged = await _reviewRepository.GetReviewsForUserAsync(userId, pageNumber, pageSize, ct);
@@ -233,24 +247,40 @@ public class ReviewService : IReviewService
         };
     }
 
-    private static ReviewResponseDto MapToResponseDto(Review r) => new()
+    private static ReviewResponseDto MapToResponseDto(Review r)
     {
-        Id = r.Id,
-        BookingId = r.BookingId,
-        ReviewerId = r.ReviewerId,
-        RevieweeId = r.RevieweeId,
-        ReviewerRole = r.ReviewerRole,
-        OverallRating = r.OverallRating,
-        Comment = r.Comment,
-        ExpertiseRating = r.ExpertiseRating,
-        CommunicationRating = r.CommunicationRating,
-        PunctualityRating = r.PunctualityRating,
-        CareQualityRating = r.CareQualityRating,
-        WouldRehire = r.WouldRehire,
-        RespectRating = r.RespectRating,
-        SafetyRating = r.SafetyRating,
-        SuppliesRating = r.SuppliesRating,
-        PaymentRating = r.PaymentRating,
-        CreatedAt = r.CreatedAt
-    };
+        var reviewerName = r.Reviewer?.Customer?.FullName
+            ?? r.Reviewer?.Nurse?.FullName
+            ?? (r.ReviewerRole == (int)UserRole.Customer ? "Khách hàng" : "Điều dưỡng");
+
+        var reviewerAvatar = r.Reviewer?.Customer?.AvatarUrl
+            ?? r.Reviewer?.Nurse?.AvatarUrl;
+
+        var revieweeName = r.Reviewee?.Customer?.FullName
+            ?? r.Reviewee?.Nurse?.FullName;
+
+        return new ReviewResponseDto
+        {
+            Id = r.Id,
+            BookingId = r.BookingId,
+            ReviewerId = r.ReviewerId,
+            RevieweeId = r.RevieweeId,
+            ReviewerRole = r.ReviewerRole,
+            ReviewerName = reviewerName,
+            ReviewerAvatarUrl = reviewerAvatar,
+            RevieweeName = revieweeName,
+            OverallRating = r.OverallRating,
+            Comment = r.Comment,
+            ExpertiseRating = r.ExpertiseRating,
+            CommunicationRating = r.CommunicationRating,
+            PunctualityRating = r.PunctualityRating,
+            CareQualityRating = r.CareQualityRating,
+            WouldRehire = r.WouldRehire,
+            RespectRating = r.RespectRating,
+            SafetyRating = r.SafetyRating,
+            SuppliesRating = r.SuppliesRating,
+            PaymentRating = r.PaymentRating,
+            CreatedAt = r.CreatedAt
+        };
+    }
 }

@@ -16,18 +16,45 @@ public class DisputeRepository : IDisputeRepository
 
     public async Task<Dispute?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        return await _db.Disputes.FirstOrDefaultAsync(d => d.Id == id, ct);
+        return await _db.Disputes
+            .Include(d => d.Customer).ThenInclude(c => c.User)
+            .Include(d => d.Booking).ThenInclude(b => b.Nurse).ThenInclude(n => n.User)
+            .Include(d => d.Booking).ThenInclude(b => b.Service)
+            .Include(d => d.Booking).ThenInclude(b => b.Recipient)
+            .FirstOrDefaultAsync(d => d.Id == id, ct);
     }
 
     public async Task<Dispute?> GetActiveDisputeByBookingIdAsync(Guid bookingId, CancellationToken ct = default)
     {
-        return await _db.Disputes.FirstOrDefaultAsync(
-            d => d.BookingId == bookingId && (d.Status == (int)DisputeStatus.Open || d.Status == (int)DisputeStatus.Processing), ct);
+        return await _db.Disputes
+            .Include(d => d.Customer).ThenInclude(c => c.User)
+            .Include(d => d.Booking).ThenInclude(b => b.Nurse).ThenInclude(n => n.User)
+            .Include(d => d.Booking).ThenInclude(b => b.Service)
+            .Include(d => d.Booking).ThenInclude(b => b.Recipient)
+            .FirstOrDefaultAsync(
+                d => d.BookingId == bookingId && (d.Status == (int)DisputeStatus.Open || d.Status == (int)DisputeStatus.Processing), ct);
+    }
+
+    public async Task<Dispute?> GetLatestDisputeByBookingIdAsync(Guid bookingId, CancellationToken ct = default)
+    {
+        return await _db.Disputes
+            .Include(d => d.Customer).ThenInclude(c => c.User)
+            .Include(d => d.Booking).ThenInclude(b => b.Nurse).ThenInclude(n => n.User)
+            .Include(d => d.Booking).ThenInclude(b => b.Service)
+            .Include(d => d.Booking).ThenInclude(b => b.Recipient)
+            .OrderByDescending(d => d.CreatedAt)
+            .FirstOrDefaultAsync(d => d.BookingId == bookingId, ct);
     }
 
     public async Task<PagedResult<Dispute>> GetAllPagedAsync(int pageNumber, int pageSize, int? status, CancellationToken ct = default)
     {
-        var query = _db.Disputes.AsNoTracking().AsQueryable();
+        var query = _db.Disputes
+            .AsNoTracking()
+            .Include(d => d.Customer).ThenInclude(c => c.User)
+            .Include(d => d.Booking).ThenInclude(b => b.Nurse).ThenInclude(n => n.User)
+            .Include(d => d.Booking).ThenInclude(b => b.Service)
+            .Include(d => d.Booking).ThenInclude(b => b.Recipient)
+            .AsQueryable();
 
         if (status.HasValue)
         {

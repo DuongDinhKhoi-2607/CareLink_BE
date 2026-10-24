@@ -152,10 +152,12 @@ public class BookingRepository(CareLinkDbContext db) : IBookingRepository
 
     private static IQueryable<Booking> WithDetails(IQueryable<Booking> query) =>
         query
-            .Include(b => b.Customer)
-            .Include(b => b.Nurse)
+            .Include(b => b.Customer).ThenInclude(c => c.User)
+            .Include(b => b.Nurse).ThenInclude(n => n.User)
             .Include(b => b.Recipient)
             .Include(b => b.Service)
             .Include(b => b.BookingServices).ThenInclude(bs => bs.Service)
-            .Include(b => b.Payment);
+            .Include(b => b.Payment)
+            .Include(b => b.Reviews)
+            .Include(b => b.Disputes);
 }

@@ -13,6 +13,7 @@ public class BookingResponse
     public string CustomerName { get; init; } = null!;
     public string? CustomerAvatarUrl { get; init; }
     public string? CustomerPhone { get; init; }
+    public string? CustomerEmail { get; init; }
     public string? EmergencyContactName { get; init; }
     public string? EmergencyContactPhone { get; init; }
     public string? EmergencyContactRelation { get; init; }
@@ -21,6 +22,7 @@ public class BookingResponse
     public string NurseName { get; init; } = null!;
     public string? NurseAvatarUrl { get; init; }
     public string? NursePhone { get; init; }
+    public string? NurseEmail { get; init; }
 
     public Guid RecipientId { get; init; }
     public string RecipientName { get; init; } = null!;
@@ -63,6 +65,21 @@ public class BookingResponse
 
     /// <summary>Tổng tiền khách thanh toán qua PayOS Escrow (Giá dịch vụ + 60k phí sàn).</summary>
     public decimal TotalPaymentAmount => TotalPrice + PlatformFee;
+
+    // ── Trạng thái đánh giá 2 chiều (Reviews) ──
+    public bool HasCustomerReviewed { get; init; }
+    public decimal? CustomerRating { get; init; }
+    public string? CustomerReviewComment { get; init; }
+
+    public bool HasNurseReviewed { get; init; }
+    public decimal? NurseRating { get; init; }
+    public string? NurseReviewComment { get; init; }
+
+    // ── Trạng thái khiếu nại (Disputes) ──
+    public bool HasDispute { get; init; }
+    public Guid? DisputeId { get; init; }
+    public string? DisputeReason { get; init; }
+    public int? DisputeStatus { get; init; }
 }
 
 public class BookingServiceItemDto
@@ -75,63 +92,82 @@ public class BookingServiceItemDto
 
 public static class BookingMappings
 {
-    /// <summary>Requires Customer, Nurse, Recipient, Service (and optionally Payment) to be loaded.</summary>
-    public static BookingResponse ToResponse(this Booking b) => new()
+    /// <summary>Requires Customer, Nurse, Recipient, Service (and optionally Payment, Reviews, Disputes) to be loaded.</summary>
+    public static BookingResponse ToResponse(this Booking b)
     {
-        Id = b.Id,
-        Status = (BookingStatus)b.Status,
-        CustomerId = b.CustomerId,
-        CustomerName = b.Customer.FullName,
-        CustomerAvatarUrl = b.Customer.AvatarUrl,
-        CustomerPhone = b.Customer.Phone,
-        EmergencyContactName = b.Customer.EmergencyContactName,
-        EmergencyContactPhone = b.Customer.EmergencyContactPhone,
-        EmergencyContactRelation = b.Customer.EmergencyContactRelation,
-        NurseId = b.NurseId,
-        NurseName = b.Nurse.FullName,
-        NurseAvatarUrl = b.Nurse.AvatarUrl,
-        NursePhone = b.Nurse.Phone,
-        RecipientId = b.RecipientId,
-        RecipientName = b.Recipient.FullName,
-        ServiceId = b.ServiceId,
-        ServiceName = b.Service?.ServiceName ?? string.Empty,
-        ScheduledStart = b.ScheduledStart,
-        ScheduledEnd = b.ScheduledEnd,
-        TotalPrice = b.TotalPrice,
-        AddressSnapshot = b.AddressSnapshot,
-        Latitude = b.LatitudeSnapshot,
-        Longitude = b.LongitudeSnapshot,
-        CheckInLatitude = b.CheckInLatitude,
-        CheckInLongitude = b.CheckInLongitude,
-        CheckInNote = b.CheckInNote,
-        PaymentStatus = b.Payment is null ? null : (PaymentStatus)b.Payment.Status,
-        RefundedAmount = b.Payment?.RefundedAmount,
-        CancelReason = b.CancelReason,
-        CanceledBy = b.CanceledBy is null ? null : (CanceledBy)b.CanceledBy.Value,
-        CreatedAt = b.CreatedAt,
-        AcceptedAt = b.AcceptedAt,
-        StartedAt = b.StartedAt,
-        NurseConfirmedAt = b.NurseConfirmedAt,
-        CustomerConfirmedAt = b.CustomerConfirmedAt,
-        CompletedAt = b.CompletedAt,
-        CanceledAt = b.CanceledAt,
-        Services = b.BookingServices != null && b.BookingServices.Count > 0
-            ? b.BookingServices.Select(s => new BookingServiceItemDto
-            {
-                ServiceId = s.ServiceId,
-                ServiceName = s.Service?.ServiceName ?? string.Empty,
-                Price = s.Price,
-                DurationMinutes = s.DurationMinutes
-            }).ToList()
-            : new List<BookingServiceItemDto>
-            {
-                new BookingServiceItemDto
+        var customerReview = b.Reviews?.FirstOrDefault(r => r.ReviewerRole == (int)UserRole.Customer);
+        var nurseReview = b.Reviews?.FirstOrDefault(r => r.ReviewerRole == (int)UserRole.Nurse);
+        var latestDispute = b.Disputes?.OrderByDescending(d => d.CreatedAt).FirstOrDefault();
+
+        return new()
+        {
+            Id = b.Id,
+            Status = (BookingStatus)b.Status,
+            CustomerId = b.CustomerId,
+            CustomerName = b.Customer.FullName,
+            CustomerAvatarUrl = b.Customer.AvatarUrl,
+            CustomerPhone = b.Customer.Phone,
+            CustomerEmail = b.Customer.User?.Email,
+            EmergencyContactName = b.Customer.EmergencyContactName,
+            EmergencyContactPhone = b.Customer.EmergencyContactPhone,
+            EmergencyContactRelation = b.Customer.EmergencyContactRelation,
+            NurseId = b.NurseId,
+            NurseName = b.Nurse.FullName,
+            NurseAvatarUrl = b.Nurse.AvatarUrl,
+            NursePhone = b.Nurse.Phone,
+            NurseEmail = b.Nurse.User?.Email,
+            RecipientId = b.RecipientId,
+            RecipientName = b.Recipient.FullName,
+            ServiceId = b.ServiceId,
+            ServiceName = b.Service?.ServiceName ?? string.Empty,
+            ScheduledStart = b.ScheduledStart,
+            ScheduledEnd = b.ScheduledEnd,
+            TotalPrice = b.TotalPrice,
+            AddressSnapshot = b.AddressSnapshot,
+            Latitude = b.LatitudeSnapshot,
+            Longitude = b.LongitudeSnapshot,
+            CheckInLatitude = b.CheckInLatitude,
+            CheckInLongitude = b.CheckInLongitude,
+            CheckInNote = b.CheckInNote,
+            PaymentStatus = b.Payment is null ? null : (PaymentStatus)b.Payment.Status,
+            RefundedAmount = b.Payment?.RefundedAmount,
+            CancelReason = b.CancelReason,
+            CanceledBy = b.CanceledBy is null ? null : (CanceledBy)b.CanceledBy.Value,
+            CreatedAt = b.CreatedAt,
+            AcceptedAt = b.AcceptedAt,
+            StartedAt = b.StartedAt,
+            NurseConfirmedAt = b.NurseConfirmedAt,
+            CustomerConfirmedAt = b.CustomerConfirmedAt,
+            CompletedAt = b.CompletedAt,
+            CanceledAt = b.CanceledAt,
+            HasCustomerReviewed = customerReview != null,
+            CustomerRating = customerReview?.OverallRating,
+            CustomerReviewComment = customerReview?.Comment,
+            HasNurseReviewed = nurseReview != null,
+            NurseRating = nurseReview?.OverallRating,
+            NurseReviewComment = nurseReview?.Comment,
+            HasDispute = latestDispute != null,
+            DisputeId = latestDispute?.Id,
+            DisputeReason = latestDispute?.Reason,
+            DisputeStatus = latestDispute?.Status,
+            Services = b.BookingServices != null && b.BookingServices.Count > 0
+                ? b.BookingServices.Select(s => new BookingServiceItemDto
                 {
-                    ServiceId = b.ServiceId,
-                    ServiceName = b.Service?.ServiceName ?? string.Empty,
-                    Price = b.TotalPrice,
-                    DurationMinutes = b.Service?.DurationMinutes ?? 0
+                    ServiceId = s.ServiceId,
+                    ServiceName = s.Service?.ServiceName ?? string.Empty,
+                    Price = s.Price,
+                    DurationMinutes = s.DurationMinutes
+                }).ToList()
+                : new List<BookingServiceItemDto>
+                {
+                    new BookingServiceItemDto
+                    {
+                        ServiceId = b.ServiceId,
+                        ServiceName = b.Service?.ServiceName ?? string.Empty,
+                        Price = b.TotalPrice,
+                        DurationMinutes = b.Service?.DurationMinutes ?? 0
+                    }
                 }
-            }
-    };
+        };
+    }
 }

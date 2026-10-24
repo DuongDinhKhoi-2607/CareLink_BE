@@ -16,20 +16,44 @@ public class ReviewRepository : IReviewRepository
 
     public async Task<Review?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        return await _db.Reviews.FirstOrDefaultAsync(r => r.Id == id, ct);
+        return await _db.Reviews
+            .Include(r => r.Reviewer).ThenInclude(u => u.Customer)
+            .Include(r => r.Reviewer).ThenInclude(u => u.Nurse)
+            .Include(r => r.Reviewee).ThenInclude(u => u.Customer)
+            .Include(r => r.Reviewee).ThenInclude(u => u.Nurse)
+            .FirstOrDefaultAsync(r => r.Id == id, ct);
     }
 
     public async Task<Review?> GetByBookingAndReviewerAsync(Guid bookingId, Guid reviewerId, CancellationToken ct = default)
     {
-        return await _db.Reviews.FirstOrDefaultAsync(
-            r => r.BookingId == bookingId && r.ReviewerId == reviewerId, ct);
+        return await _db.Reviews
+            .Include(r => r.Reviewer).ThenInclude(u => u.Customer)
+            .Include(r => r.Reviewer).ThenInclude(u => u.Nurse)
+            .Include(r => r.Reviewee).ThenInclude(u => u.Customer)
+            .Include(r => r.Reviewee).ThenInclude(u => u.Nurse)
+            .FirstOrDefaultAsync(r => r.BookingId == bookingId && r.ReviewerId == reviewerId, ct);
+    }
+
+    public async Task<List<Review>> GetReviewsByBookingIdAsync(Guid bookingId, CancellationToken ct = default)
+    {
+        return await _db.Reviews
+            .AsNoTracking()
+            .Include(r => r.Reviewer).ThenInclude(u => u.Customer)
+            .Include(r => r.Reviewer).ThenInclude(u => u.Nurse)
+            .Include(r => r.Reviewee).ThenInclude(u => u.Customer)
+            .Include(r => r.Reviewee).ThenInclude(u => u.Nurse)
+            .Where(r => r.BookingId == bookingId)
+            .OrderBy(r => r.CreatedAt)
+            .ToListAsync(ct);
     }
 
     public async Task<PagedResult<Review>> GetReviewsForUserAsync(Guid userId, int pageNumber, int pageSize, CancellationToken ct = default)
     {
         var query = _db.Reviews
             .AsNoTracking()
-            .Where(r => r.RevieweeId == userId);
+            .Include(r => r.Reviewer).ThenInclude(u => u.Customer)
+            .Include(r => r.Reviewer).ThenInclude(u => u.Nurse)
+            .Where(r => r.RevieweeId == userId || (r.Reviewee.Nurse != null && r.Reviewee.Nurse.Id == userId));
 
         var totalCount = await query.CountAsync(ct);
 
@@ -46,7 +70,7 @@ public class ReviewRepository : IReviewRepository
     {
         var ratings = await _db.Reviews
             .AsNoTracking()
-            .Where(r => r.RevieweeId == nurseId && r.ReviewerRole == (int)UserRole.Customer)
+            .Where(r => (r.RevieweeId == nurseId || (r.Reviewee.Nurse != null && r.Reviewee.Nurse.Id == nurseId)) && r.ReviewerRole == (int)UserRole.Customer)
             .Select(r => r.OverallRating)
             .ToListAsync(ct);
 
@@ -58,7 +82,7 @@ public class ReviewRepository : IReviewRepository
     public async Task<int> CountReviewsForNurseAsync(Guid nurseId, CancellationToken ct = default)
     {
         return await _db.Reviews
-            .CountAsync(r => r.RevieweeId == nurseId && r.ReviewerRole == (int)UserRole.Customer, ct);
+            .CountAsync(r => (r.RevieweeId == nurseId || (r.Reviewee.Nurse != null && r.Reviewee.Nurse.Id == nurseId)) && r.ReviewerRole == (int)UserRole.Customer, ct);
     }
 
     public async Task<decimal> CalculatePlatformAverageRatingAsync(CancellationToken ct = default)

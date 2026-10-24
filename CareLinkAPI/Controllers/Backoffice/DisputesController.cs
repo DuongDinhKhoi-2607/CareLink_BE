@@ -31,6 +31,18 @@ public class DisputesController : ControllerBase
     }
 
     /// <summary>
+    /// Lấy chi tiết khiếu nại của một ca chăm sóc theo Booking ID (Khách hàng, Điều dưỡng phụ trách ca, hoặc Admin)
+    /// </summary>
+    [HttpGet("api/v1/bookings/{bookingId:guid}/dispute")]
+    public async Task<ActionResult<DisputeResponseDto>> GetByBookingId(
+        [FromRoute] Guid bookingId,
+        CancellationToken ct)
+    {
+        var result = await _disputeService.GetDisputeByBookingIdAsync(bookingId, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Lấy danh sách tất cả khiếu nại phân trang và lọc theo trạng thái (Dành cho Quản trị viên)
     /// </summary>
     [Authorize(Roles = "Admin")]
