@@ -436,7 +436,9 @@ public class BookingService(
             if (!BookingStateMachine.CanTransition(previous, BookingStatus.Canceled))
             {
                 throw new ConflictException(
-                    $"A booking in status '{previous}' can no longer be canceled.");
+                    previous == BookingStatus.Canceled
+                        ? "Lịch hẹn này đã ở trạng thái đã hủy trước đó."
+                        : $"Lịch hẹn ở trạng thái '{previous}' không thể hủy.");
             }
 
             var reason = request.Reason.Trim();
