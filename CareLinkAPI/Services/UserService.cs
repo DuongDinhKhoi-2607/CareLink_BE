@@ -204,6 +204,8 @@ public class UserService(
                 WorkDistrict = user.Nurse.WorkDistrict,
                 AverageRating = user.Nurse.AverageRating,
                 TotalReviews = user.Nurse.TotalReviews,
+                PractitionerType = user.Nurse.PractitionerType,
+                PractitionerTypeName = ((NursePractitionerType)user.Nurse.PractitionerType).ToString(),
                 Status = user.Nurse.Status,
                 StatusName = ((NurseStatus)user.Nurse.Status).ToString()
             };
