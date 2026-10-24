@@ -69,11 +69,20 @@ public class BookingRepository(CareLinkDbContext db) : IBookingRepository
         return (items, total);
     }
 
+    public Task<HashSet<Guid>> GetBusyNurseIdsAsync(
+        DateTime startUtc,
+        DateTime endUtc,
+        DateTime pendingPaymentCutoffUtc,
+        IReadOnlyCollection<Guid> candidateNurseIds,
+        CancellationToken cancellationToken = default) =>
+        GetBusyNurseIdsAsync(startUtc, endUtc, pendingPaymentCutoffUtc, candidateNurseIds, null, cancellationToken);
+
     public async Task<HashSet<Guid>> GetBusyNurseIdsAsync(
         DateTime startUtc,
         DateTime endUtc,
         DateTime pendingPaymentCutoffUtc,
         IReadOnlyCollection<Guid> candidateNurseIds,
+        Guid? excludeBookingId,
         CancellationToken cancellationToken = default)
     {
         var lockingStatuses = BookingStateMachine.SlotLockingStatuses;
@@ -83,13 +92,20 @@ public class BookingRepository(CareLinkDbContext db) : IBookingRepository
         var bufferedStartUtc = startUtc.AddMinutes(-30);
         var bufferedEndUtc = endUtc.AddMinutes(30);
 
-        var ids = await db.Bookings
+        var query = db.Bookings
             .AsNoTracking()
             .Where(b => candidateNurseIds.Contains(b.NurseId)
                         && b.ScheduledStart < bufferedEndUtc
                         && b.ScheduledEnd > bufferedStartUtc
                         && (lockingStatuses.Contains(b.Status)
-                            || (b.Status == pendingPayment && b.CreatedAt >= pendingPaymentCutoffUtc)))
+                            || (b.Status == pendingPayment && b.CreatedAt >= pendingPaymentCutoffUtc)));
+
+        if (excludeBookingId.HasValue)
+        {
+            query = query.Where(b => b.Id != excludeBookingId.Value);
+        }
+
+        var ids = await query
             .Select(b => b.NurseId)
             .Distinct()
             .ToListAsync(cancellationToken);
