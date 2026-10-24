@@ -43,16 +43,54 @@ public class PagingQuery
 public class CreatePayoutRequest
 {
     [Range(50_000, 1_000_000_000, ErrorMessage = "Số tiền rút tối thiểu là 50.000đ.")]
-    public decimal Amount { get; init; }
+    public decimal Amount { get; set; }
 
-    [Required, StringLength(100)]
-    public string BankName { get; init; } = string.Empty;
+    [Required(ErrorMessage = "Vui lòng chọn ngân hàng thụ hưởng."), StringLength(100)]
+    public string BankName { get; set; } = string.Empty;
 
-    [Required, StringLength(30), RegularExpression(@"^[0-9]{6,30}$", ErrorMessage = "Số tài khoản chỉ gồm chữ số.")]
-    public string BankAccountNumber { get; init; } = string.Empty;
+    private string _bankAccountNumber = string.Empty;
 
-    [Required, StringLength(100)]
-    public string BankAccountName { get; init; } = string.Empty;
+    [Required(ErrorMessage = "Vui lòng nhập số tài khoản ngân hàng."), StringLength(30), RegularExpression(@"^[0-9]{6,30}$", ErrorMessage = "Số tài khoản chỉ gồm từ 6 đến 30 chữ số.")]
+    public string BankAccountNumber
+    {
+        get => _bankAccountNumber;
+        set => _bankAccountNumber = value;
+    }
+
+    /// <summary>Alias tương thích ngược khi FE gửi accountNumber.</summary>
+    public string? AccountNumber
+    {
+        get => _bankAccountNumber;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(_bankAccountNumber) && !string.IsNullOrWhiteSpace(value))
+            {
+                _bankAccountNumber = value;
+            }
+        }
+    }
+
+    private string _bankAccountName = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập tên chủ tài khoản."), StringLength(100)]
+    public string BankAccountName
+    {
+        get => _bankAccountName;
+        set => _bankAccountName = value;
+    }
+
+    /// <summary>Alias tương thích ngược khi FE gửi accountHolder.</summary>
+    public string? AccountHolder
+    {
+        get => _bankAccountName;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(_bankAccountName) && !string.IsNullOrWhiteSpace(value))
+            {
+                _bankAccountName = value;
+            }
+        }
+    }
 }
 
 /// <summary>Pay-05: admin approves a payout after transferring the money.</summary>
