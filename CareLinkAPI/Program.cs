@@ -85,6 +85,7 @@ builder.Services.AddCors(options =>
 });
 
 // Infrastructure, Repositories, Services
+builder.Services.AddHttpClient();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCareLinkRepositories();
 builder.Services.AddCareLinkServices();
