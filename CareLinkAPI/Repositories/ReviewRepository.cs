@@ -53,7 +53,12 @@ public class ReviewRepository : IReviewRepository
             .AsNoTracking()
             .Include(r => r.Reviewer).ThenInclude(u => u.Customer)
             .Include(r => r.Reviewer).ThenInclude(u => u.Nurse)
-            .Where(r => r.RevieweeId == userId || (r.Reviewee.Nurse != null && r.Reviewee.Nurse.Id == userId));
+            .Include(r => r.Reviewee).ThenInclude(u => u.Customer)
+            .Include(r => r.Reviewee).ThenInclude(u => u.Nurse)
+            .Include(r => r.Booking)
+            .Where(r => r.RevieweeId == userId 
+                     || (r.Reviewee != null && r.Reviewee.Nurse != null && r.Reviewee.Nurse.Id == userId)
+                     || (r.Booking != null && (r.Booking.NurseId == userId || r.Booking.CustomerId == userId)));
 
         var totalCount = await query.CountAsync(ct);
 
@@ -70,7 +75,10 @@ public class ReviewRepository : IReviewRepository
     {
         var ratings = await _db.Reviews
             .AsNoTracking()
-            .Where(r => (r.RevieweeId == nurseId || (r.Reviewee.Nurse != null && r.Reviewee.Nurse.Id == nurseId)) && r.ReviewerRole == (int)UserRole.Customer)
+            .Where(r => r.ReviewerRole == (int)UserRole.Customer && 
+                       (r.RevieweeId == nurseId 
+                     || (r.Reviewee != null && r.Reviewee.Nurse != null && r.Reviewee.Nurse.Id == nurseId)
+                     || (r.Booking != null && r.Booking.NurseId == nurseId)))
             .Select(r => r.OverallRating)
             .ToListAsync(ct);
 
@@ -82,7 +90,10 @@ public class ReviewRepository : IReviewRepository
     public async Task<int> CountReviewsForNurseAsync(Guid nurseId, CancellationToken ct = default)
     {
         return await _db.Reviews
-            .CountAsync(r => (r.RevieweeId == nurseId || (r.Reviewee.Nurse != null && r.Reviewee.Nurse.Id == nurseId)) && r.ReviewerRole == (int)UserRole.Customer, ct);
+            .CountAsync(r => r.ReviewerRole == (int)UserRole.Customer && 
+                            (r.RevieweeId == nurseId 
+                          || (r.Reviewee != null && r.Reviewee.Nurse != null && r.Reviewee.Nurse.Id == nurseId)
+                          || (r.Booking != null && r.Booking.NurseId == nurseId)), ct);
     }
 
     public async Task<decimal> CalculatePlatformAverageRatingAsync(CancellationToken ct = default)
