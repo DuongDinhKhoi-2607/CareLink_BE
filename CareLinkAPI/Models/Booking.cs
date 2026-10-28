@@ -20,6 +20,13 @@ public partial class Booking
     public DateTime ScheduledEnd { get; set; }
 
     public decimal TotalPrice { get; set; }
+    public decimal BaseServicesPrice { get; set; }
+    public int ExtraMinutes { get; set; }
+    public decimal ExtraMinutesPrice { get; set; }
+    public decimal PlatformFee { get; set; } = 60000;
+    public bool IsMedicalRecordShared { get; set; } = true;
+    public DateTime? ActualFinishedAt { get; set; }
+    public string? CustomerNotes { get; set; }
 
     public string AddressSnapshot { get; set; } = null!;
 

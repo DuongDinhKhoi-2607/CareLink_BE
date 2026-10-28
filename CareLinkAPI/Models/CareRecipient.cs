@@ -25,6 +25,8 @@ public partial class CareRecipient
 
     public decimal? Longitude { get; set; }
 
+    public bool IsMedicalRecordShared { get; set; } = true;
+
     public bool IsDeleted { get; set; } = false;
 
     public DateTime CreatedAt { get; set; }

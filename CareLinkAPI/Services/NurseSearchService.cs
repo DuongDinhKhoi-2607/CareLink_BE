@@ -264,4 +264,203 @@ public class NurseSearchService(
             .ThenByDescending(r => r.ExperienceYears)
             .ToList();
     }
+
+    public async Task<NurseDaySlotsResponse> GetAvailableSlotsAsync(
+        Guid nurseId,
+        DateOnly date,
+        Guid? customerId,
+        CancellationToken cancellationToken = default)
+    {
+        var nurse = await nurses.GetByIdAsync(nurseId, cancellationToken)
+                    ?? throw new NotFoundException("Nurse not found.");
+
+        var dayOfWeek = (int)date.DayOfWeek;
+        var dayOfWeekName = GetVietnameseDayOfWeek(date.DayOfWeek);
+
+        // 1. Lấy lịch rảnh định kỳ của điều dưỡng trong ngày
+        var availabilitiesList = await dbContext.NurseAvailabilities
+            .AsNoTracking()
+            .Where(a => a.NurseId == nurseId && a.IsActive && (a.DayOfWeek == null || a.DayOfWeek == dayOfWeek))
+            .ToListAsync(cancellationToken);
+
+        // 2. Lấy các ca đặt đang hoạt động trong ngày (theo giờ UTC)
+        var startOfDayUtc = DateTime.SpecifyKind(date.ToDateTime(new TimeOnly(0, 0)) - VietnamTime.Offset, DateTimeKind.Utc);
+        var endOfDayUtc = DateTime.SpecifyKind(date.ToDateTime(new TimeOnly(23, 59, 59)) - VietnamTime.Offset, DateTimeKind.Utc);
+
+        var pendingCutoff = DateTime.UtcNow.AddMinutes(-options.Value.PendingPaymentHoldMinutes);
+        var activeBookings = await dbContext.Bookings
+            .AsNoTracking()
+            .Where(b => b.NurseId == nurseId
+                        && b.ScheduledStart < endOfDayUtc
+                        && b.ScheduledEnd > startOfDayUtc
+                        && b.Status != (int)BookingStatus.Canceled
+                        && (b.Status != (int)BookingStatus.PendingPayment || b.CreatedAt >= pendingCutoff))
+            .ToListAsync(cancellationToken);
+
+        var nowUtc = DateTime.UtcNow;
+        var slots = new List<NurseAvailableSlotResponse>();
+
+        // Chạy 16 slot chuẩn từ 06:00 đến 22:00
+        for (int h = 6; h <= 21; h++)
+        {
+            var slotIndex = h - 6;
+            var startLocalTime = new TimeOnly(h, 0);
+            var endLocalTime = new TimeOnly(h + 1, 0);
+
+            var slotStartUtc = DateTime.SpecifyKind(date.ToDateTime(startLocalTime) - VietnamTime.Offset, DateTimeKind.Utc);
+            var slotEndUtc = DateTime.SpecifyKind(date.ToDateTime(endLocalTime) - VietnamTime.Offset, DateTimeKind.Utc);
+
+            var slotResponse = new NurseAvailableSlotResponse
+            {
+                SlotIndex = slotIndex,
+                StartTime = $"{h:D2}:00",
+                EndTime = $"{(h + 1):D2}:00",
+                StartUtc = slotStartUtc,
+                EndUtc = slotEndUtc,
+                IsAvailable = true,
+                Reason = "Còn trống"
+            };
+
+            // Kiểm tra đã qua giờ chưa
+            if (slotStartUtc <= nowUtc)
+            {
+                slotResponse.IsAvailable = false;
+                slotResponse.Reason = "Khung giờ đã qua";
+                slots.Add(slotResponse);
+                continue;
+            }
+
+            // Kiểm tra nằm trong lịch rảnh đã đăng ký không
+            var isCovered = availabilitiesList.Any(a => a.StartTime <= startLocalTime && a.EndTime >= endLocalTime);
+            if (!isCovered)
+            {
+                slotResponse.IsAvailable = false;
+                slotResponse.Reason = "Ngoài lịch làm việc của điều dưỡng";
+                slots.Add(slotResponse);
+                continue;
+            }
+
+            // Kiểm tra trùng ca đã đặt
+            var directConflict = activeBookings.FirstOrDefault(b => b.ScheduledStart < slotEndUtc && b.ScheduledEnd > slotStartUtc);
+            if (directConflict != null)
+            {
+                slotResponse.IsAvailable = false;
+                slotResponse.Reason = "Đã có người đặt ca này";
+                slots.Add(slotResponse);
+                continue;
+            }
+
+            // Kiểm tra quy tắc đệm di chuyển 60 phút giữa 2 khách hàng khác nhau
+            var bufferConflict = activeBookings.FirstOrDefault(b =>
+                customerId.HasValue ? b.CustomerId != customerId.Value : true
+                && slotStartUtc < b.ScheduledEnd.AddMinutes(60)
+                && slotEndUtc > b.ScheduledEnd);
+
+            if (bufferConflict != null)
+            {
+                slotResponse.IsAvailable = false;
+                slotResponse.Reason = "Thời gian đệm di chuyển & chuẩn bị vô trùng (60 phút)";
+                slots.Add(slotResponse);
+                continue;
+            }
+
+            slots.Add(slotResponse);
+        }
+
+        return new NurseDaySlotsResponse
+        {
+            NurseId = nurseId,
+            Date = date,
+            DayOfWeekName = dayOfWeekName,
+            Slots = slots
+        };
+    }
+
+    public async Task<NurseDistanceResponse> CalculateDistanceAsync(
+        Guid nurseId,
+        Guid? addressId,
+        decimal? latitude,
+        decimal? longitude,
+        Guid? customerId,
+        CancellationToken cancellationToken = default)
+    {
+        var nurse = await nurses.GetByIdAsync(nurseId, cancellationToken)
+                    ?? throw new NotFoundException("Nurse not found.");
+
+        double? custLat = null;
+        double? custLon = null;
+        string? addressText = null;
+
+        if (latitude.HasValue && longitude.HasValue)
+        {
+            custLat = (double)latitude.Value;
+            custLon = (double)longitude.Value;
+        }
+        else if (addressId.HasValue)
+        {
+            var addr = await dbContext.Addresses.AsNoTracking().FirstOrDefaultAsync(a => a.Id == addressId.Value, cancellationToken);
+            if (addr != null)
+            {
+                addressText = addr.FullAddress;
+                if (addr.Latitude.HasValue && addr.Longitude.HasValue)
+                {
+                    custLat = (double)addr.Latitude.Value;
+                    custLon = (double)addr.Longitude.Value;
+                }
+            }
+        }
+        else if (customerId.HasValue)
+        {
+            var defaultAddr = await dbContext.Addresses.AsNoTracking()
+                .Where(a => a.CustomerId == customerId.Value)
+                .OrderByDescending(a => a.IsDefault)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (defaultAddr != null)
+            {
+                addressText = defaultAddr.FullAddress;
+                if (defaultAddr.Latitude.HasValue && defaultAddr.Longitude.HasValue)
+                {
+                    custLat = (double)defaultAddr.Latitude.Value;
+                    custLon = (double)defaultAddr.Longitude.Value;
+                }
+            }
+        }
+
+        double? distanceKm = null;
+        bool isWithin = false;
+        int? estTravelMins = null;
+
+        if (custLat.HasValue && custLon.HasValue && nurse.Latitude.HasValue && nurse.Longitude.HasValue)
+        {
+            distanceKm = GeoUtils.HaversineKm(custLat.Value, custLon.Value, (double)nurse.Latitude.Value, (double)nurse.Longitude.Value);
+            distanceKm = Math.Round(distanceKm.Value, 2);
+            isWithin = distanceKm.Value <= nurse.ServiceRadiusKm;
+            estTravelMins = (int)Math.Ceiling(distanceKm.Value * 3.0); // ~20km/h trong đô thị
+        }
+
+        return new NurseDistanceResponse
+        {
+            NurseId = nurse.Id,
+            NurseName = nurse.FullName,
+            NurseDistrict = nurse.WorkDistrict,
+            ServiceRadiusKm = nurse.ServiceRadiusKm,
+            DistanceKm = distanceKm,
+            IsWithinServiceRadius = isWithin,
+            CustomerAddressText = addressText,
+            EstimatedTravelMinutes = estTravelMins
+        };
+    }
+
+    private static string GetVietnameseDayOfWeek(DayOfWeek dow) => dow switch
+    {
+        DayOfWeek.Sunday => "Chủ nhật",
+        DayOfWeek.Monday => "Thứ hai",
+        DayOfWeek.Tuesday => "Thứ ba",
+        DayOfWeek.Wednesday => "Thứ tư",
+        DayOfWeek.Thursday => "Thứ năm",
+        DayOfWeek.Friday => "Thứ sáu",
+        DayOfWeek.Saturday => "Thứ bảy",
+        _ => dow.ToString()
+    };
 }

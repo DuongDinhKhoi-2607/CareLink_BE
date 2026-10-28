@@ -29,6 +29,31 @@ public class DemoDbSeeder
 
         using var db = new CareLinkDbContext(options);
 
+        _output.WriteLine("=== 0. ĐỒNG BỘ CẤU TRÚC BẢNG (V3.0 MIGRATION) ===");
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE public.nurse_service_pricings ADD COLUMN IF NOT EXISTS custom_duration_minutes INT NOT NULL DEFAULT 60;
+            ALTER TABLE public.care_recipients ADD COLUMN IF NOT EXISTS is_medical_record_shared BOOLEAN NOT NULL DEFAULT true;
+            ALTER TABLE public.bookings
+                ADD COLUMN IF NOT EXISTS base_services_price NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS extra_minutes INT NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS extra_minutes_price NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(12, 2) NOT NULL DEFAULT 60000,
+                ADD COLUMN IF NOT EXISTS is_medical_record_shared BOOLEAN NOT NULL DEFAULT true,
+                ADD COLUMN IF NOT EXISTS actual_finished_at TIMESTAMPTZ NULL,
+                ADD COLUMN IF NOT EXISTS customer_notes TEXT NULL;
+            ALTER TABLE public.booking_proposals
+                ADD COLUMN IF NOT EXISTS counter_price NUMERIC(12, 2) NULL,
+                ADD COLUMN IF NOT EXISTS counter_note TEXT NULL;
+            CREATE TABLE IF NOT EXISTS public.booking_services (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
+                service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE RESTRICT,
+                price NUMERIC(12,2) NOT NULL,
+                duration_minutes INT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+            );
+        ");
+
         _output.WriteLine("=== 1. DỌN DẸP TOÀN BỘ DỮ LIỆU CŨ ===");
 
         db.WalletTransactions.RemoveRange(db.WalletTransactions);

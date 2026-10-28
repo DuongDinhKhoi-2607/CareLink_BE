@@ -266,4 +266,18 @@ stateDiagram-v2
 | `DELETE`| `/api/v1/services/{id}` | Vô hiệu hóa dịch vụ (Soft Delete / Deactivate) | Route `{id}` | `OperationResultResponse` | Admin |
 | `PATCH` | `/api/v1/services/{id}/status` | Kích hoạt hoặc vô hiệu hóa dịch vụ | Route `{id}`, `UpdateServiceStatusDto` | `ServiceResponseDto` | Admin |
 
+---
+
+### 20. Hợp đồng Nâng cấp Master V3 (Cinema Slots & Mentor Feedback)
+| HTTP Method | Route | Tóm tắt chức năng | Request DTO / Params | Response DTO | Authorization |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| `GET` | `/api/v1/nurses/{nurseId}/available-slots` | Lấy danh sách 16 slot rạp phim (06:00 - 22:00), áp dụng đệm di chuyển 60 phút giữa 2 khách khác nhau | Query `date` (YYYY-MM-DD), `customerId` | `NurseDaySlotsResponse` | AllowAnonymous / Authorize |
+| `GET` | `/api/v1/nurses/{nurseId}/distance` | Tính khoảng cách địa lý Haversine độc lập giữa điều dưỡng và khách hàng | Query `addressId`, `latitude`, `longitude` | `NurseDistanceResponse` | AllowAnonymous / Authorize |
+| `PUT` | `/api/v1/conversations/{conversationId}/proposals/{proposalId}/counter` | Điều dưỡng đề xuất mức giá mới (Counter-Offer) | `CounterProposalRequest` (`counterPrice`, `counterNote`) | `ProposalActionResultResponse` | Nurse |
+| `PUT` | `/api/v1/conversations/{conversationId}/proposals/{proposalId}/accept-counter` | Gia đình chấp nhận giá đề xuất mới và tạo Booking `PendingPayment` | None | `ProposalActionResultResponse` | Customer |
+| `POST` | `/api/v1/bookings` | Đặt ca trọn gói một lần (One-shot Booking): Combo dịch vụ, giờ phát sinh, cờ bảo mật bệnh án, trả ngay VietQR PayOS | `CreateBookingRequest` | `BookingResponse` (kèm `paymentInfo`) | Customer |
+| `PUT` | `/api/v1/bookings/{id}/reject` | Điều dưỡng báo bận đột xuất: Hủy ca, hoàn tiền 100% Escrow, trả về gợi ý điều dưỡng thay thế | `RejectBookingRequest` | `BookingResponse` (kèm `suggestedNurses`) | Nurse |
+| `PUT` | `/api/v1/bookings/{id}/finish` | Điều dưỡng kết ca dựa trên đầu việc lâm sàng hoàn tất và nộp bệnh án (ghi nhận `actual_finished_at`) | None | `BookingResponse` | Nurse |
+
 *(Kèm 1 Root Endpoint chẩn đoán: `GET /` -> Health Check Server).*
+

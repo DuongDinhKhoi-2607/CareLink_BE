@@ -184,6 +184,13 @@ public partial class CareLinkDbContext : DbContext
                 .HasDefaultValue(1)
                 .HasColumnName("status");
             entity.Property(e => e.TotalPrice).HasColumnName("total_price");
+            entity.Property(e => e.BaseServicesPrice).HasPrecision(12, 2).HasColumnName("base_services_price");
+            entity.Property(e => e.ExtraMinutes).HasColumnName("extra_minutes");
+            entity.Property(e => e.ExtraMinutesPrice).HasPrecision(12, 2).HasColumnName("extra_minutes_price");
+            entity.Property(e => e.PlatformFee).HasPrecision(12, 2).HasDefaultValue(60000).HasColumnName("platform_fee");
+            entity.Property(e => e.IsMedicalRecordShared).HasDefaultValue(true).HasColumnName("is_medical_record_shared");
+            entity.Property(e => e.ActualFinishedAt).HasColumnName("actual_finished_at");
+            entity.Property(e => e.CustomerNotes).HasColumnName("customer_notes");
 
             entity.Property(e => e.ConversationId).HasColumnName("conversation_id");
 
@@ -242,6 +249,9 @@ public partial class CareLinkDbContext : DbContext
                 .HasColumnName("longitude");
             entity.Property(e => e.MedicalHistory).HasColumnName("medical_history");
             entity.Property(e => e.SpecialNotes).HasColumnName("special_notes");
+            entity.Property(e => e.IsMedicalRecordShared)
+                .HasDefaultValue(true)
+                .HasColumnName("is_medical_record_shared");
             entity.Property(e => e.IsDeleted)
                 .HasDefaultValue(false)
                 .HasColumnName("is_deleted");
@@ -1002,6 +1012,8 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.Status)
                 .HasDefaultValue(1)
                 .HasColumnName("status");
+            entity.Property(e => e.CounterPrice).HasPrecision(12, 2).HasColumnName("counter_price");
+            entity.Property(e => e.CounterNote).HasColumnName("counter_note");
             entity.Property(e => e.TotalPrice).HasColumnName("total_price");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
@@ -1091,6 +1103,7 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.NurseId).HasColumnName("nurse_id");
             entity.Property(e => e.ServiceId).HasColumnName("service_id");
             entity.Property(e => e.CustomPrice).HasPrecision(12, 2).HasColumnName("custom_price");
+            entity.Property(e => e.CustomDurationMinutes).HasDefaultValue(60).HasColumnName("custom_duration_minutes");
             entity.Property(e => e.IsOffered).HasDefaultValue(true).HasColumnName("is_offered");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("timezone('utc'::text, now())").HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("timezone('utc'::text, now())").HasColumnName("updated_at");

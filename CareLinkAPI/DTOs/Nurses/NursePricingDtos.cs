@@ -12,6 +12,7 @@ public class NurseServicePricingItemDto
     public decimal BasePrice { get; set; }
     public decimal CustomPrice { get; set; }
     public int DurationMinutes { get; set; }
+    public int CustomDurationMinutes { get; set; } = 60;
     public bool IsOffered { get; set; }
     public bool RequiresLicense { get; set; }
 }
@@ -29,6 +30,9 @@ public class UpdateServicePricingItemRequest
 
     [Range(0, 100_000_000)]
     public decimal CustomPrice { get; set; }
+
+    [Range(15, 480)]
+    public int? CustomDurationMinutes { get; set; }
 
     public bool IsOffered { get; set; } = true;
 }

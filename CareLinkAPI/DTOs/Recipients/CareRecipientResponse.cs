@@ -13,5 +13,6 @@ public class CareRecipientResponse
     public string? Address { get; set; }
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
+    public bool IsMedicalRecordShared { get; set; } = true;
     public DateTime CreatedAt { get; set; }
 }

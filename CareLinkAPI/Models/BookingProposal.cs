@@ -34,6 +34,8 @@ public partial class BookingProposal
     public string? Notes { get; set; }
 
     public int Status { get; set; }
+    public decimal? CounterPrice { get; set; }
+    public string? CounterNote { get; set; }
 
     public string? ResponseNote { get; set; }
 
