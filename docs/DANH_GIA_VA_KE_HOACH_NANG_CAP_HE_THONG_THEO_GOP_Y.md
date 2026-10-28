@@ -1,324 +1,222 @@
-# 📑 ĐÁNH GIÁ CÔNG TÂM & BẢN THIẾT KẾ NÂNG CẤP HỆ THỐNG CARELINK
-### Dựa trên phản hồi từ buổi họp với Giảng viên hướng dẫn ("Dự án EXE")
+# 📑 ĐÁNH GIÁ CÔNG TÂM & BẢN THIẾT KẾ NÂNG CẤP HỆ THỐNG CARELINK (V2.0)
+### Dựa trên phản hồi từ Giảng viên hướng dẫn & Thống nhất mô hình Booking "Đặt vé xem phim"
 
 > **Dự án:** Nền tảng chăm sóc y tế tại nhà CareLink (`CareLink_BE` & `CareLink_FE`)  
-> **Phiên bản tài liệu:** 1.0 — Đánh giá độc lập, công tâm & Thiết kế kỹ thuật chi tiết  
-> **Đối tượng áp dụng:**  
-> - **Frontend:** Vy 
-> - **Backend:**  Quốc 
-> **Nguyên tắc cốt lõi:** Bảo vệ an toàn tài chính (Escrow/PayOS), trải nghiệm người dùng (UX) tinh gọn, và tuân thủ bảo mật dữ liệu y tế.
+> **Phiên bản tài liệu:** 2.0 — Tích hợp mô hình Slot 1 tiếng, Khóa đệm 60p, Dịch vụ hoàn tất & Thông báo bận linh hoạt  
+> **Phân công trách nhiệm:**  
+> - **Frontend:** Vy  
+> - **Backend:** Quốc  
+> **Nguyên tắc cốt lõi:** Bảo vệ an toàn tài chính (Escrow PayOS), trải nghiệm đặt lịch trực quan (Cinema-Style UX), và chuẩn mực bảo mật dữ liệu y tế.
 
 ---
 
 ## 🧭 I. ĐÁNH GIÁ CÔNG TÂM TỔNG THỂ (EXECUTIVE EVALUATION)
 
-Qua phân tích toàn bộ phản hồi và yêu cầu nâng cấp từ buổi họp với cô, đội ngũ AI nhận định:
+Qua phân tích phản hồi từ Giảng viên hướng dẫn và các trao đổi kiến trúc chuyên sâu, đội ngũ thống nhất 5 nhận định cốt lõi:
 
-### 1. Điểm mạnh và sự xác đáng của các góp ý từ Giảng viên
-* **Đúng với thực tế lâm sàng & chăm sóc tại nhà:** Việc cho phép điều dưỡng tùy chỉnh thời lượng dịch vụ (`duration_minutes`), cho phép khách hàng chọn combo nhiều dịch vụ hoặc thêm giờ (`extra time`), và cơ chế đàm phán giá 2 chiều phản ánh chính xác thực tế ngành điều dưỡng gia đình — nơi thể trạng mỗi bệnh nhân (nằm liệt, vết loét nặng, người già sa sút trí tuệ) đòi hỏi khối lượng công việc và thời gian rất khác nhau.
-* **Cải thiện vượt bậc về UX (Conversion Rate):** Việc gỡ bỏ wizard đặt lịch rườm rà 4-5 bước, đưa toàn bộ cấu hình ra một màn hình Order Sheet duy nhất và chốt đơn ngay lập tức sẽ giảm tỷ lệ bỏ dở ca (drop-off rate) tới hơn 60%.
-* **Tuân thủ đạo đức & pháp lý y tế:** Bổ sung checkbox đồng ý chia sẻ bệnh án (Consent Management) là bước tiến quan trọng giúp hệ thống đáp ứng Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân tại Việt Nam.
-
-### 2. Những cạm bẫy kỹ thuật & Rủi ro tài chính cần cảnh báo trước
-* ⚠️ **Rủi ro phá vỡ tính toàn vẹn tài chính (Financial Invariant):**  
-  Tuyệt đối **KHÔNG** được để Frontend tự tính `TotalPrice` hay gửi giá tùy ý lên Backend lưu trực tiếp. Toàn bộ đơn giá dịch vụ, phụ thu thêm giờ, phí sàn 60.000 VNĐ và giá đàm phán hợp lệ phải do Backend xác thực và tính toán có thẩm quyền.
-* ⚠️ **Mâu thuẫn logic "Chốt ca ngay lập tức" vs "Bảo vệ dòng tiền Escrow":**  
-  "Chốt ca ngay" không đồng nghĩa với việc bỏ qua thanh toán cọc. Hệ thống bắt buộc phải tạo Booking ở trạng thái `PendingPayment` và sinh ngay mã VietQR PayOS để khách quét trả tiền trong 30 phút. Nếu không cọc, điều dưỡng sẽ bị bùng ca hoặc khách bị điều dưỡng "leo cây".
-* ⚠️ **Xung đột khi loại bỏ "Lịch nghỉ đột xuất cứng":**  
-  Nếu bỏ tính năng đăng ký ngày nghỉ mà không có cơ chế quản lý lịch bận thay thế, điều dưỡng sẽ liên tục bị khách đặt trúng giờ bận cá nhân, dẫn đến tỷ lệ từ chối/hủy ca tăng vọt, gây ức chế cho gia đình bệnh nhân.
-
----
-
-## 🎨 II. ĐÁNH GIÁ & GIẢI PHÁP CHI TIẾT PHÂN CÔNG FRONTEND (Vy )
-
-| STT | Yêu cầu từ Giảng viên | Đánh giá tính khả thi & Trải nghiệm (UX) | Giải pháp kỹ thuật & Giao diện đề xuất cho Vy |
-| :---: | :--- | :--- | :--- |
-| **FE-01** | Thiết kế giao diện cho phép điều dưỡng nhập mức giá đề xuất linh hoạt cho từng người dùng cụ thể. | **Rất cần thiết.** Hiện tại điều dưỡng chỉ có 2 nút "Nhận ca" hoặc "Từ chối". Khách deal rẻ quá thì mất khách, nhận thì lỗ công. | Tại khung Chat khi nhận được Proposal, bổ sung nút **"Đề xuất giá mới"**. Mở Bottom Sheet / Modal: cho phép nhập `Số tiền mới` + `Lý do điều chỉnh` (ví dụ: *"Bệnh nhân loét độ 3 cần thay băng chuyên sâu 45p"*). |
-| **FE-02** | Bổ sung thông số khoảng cách địa lý vào thẻ thông tin điều dưỡng để gia đình so sánh và lựa chọn. | **Đã có sẵn trên Backend (`DistanceKm`), FE chưa tận dụng.** Hiện `GET /api/v1/nurses/search` đã trả `DistanceKm` nếu có tọa độ. | Khi vào trang Tìm kiếm: FE tự động lấy GPS trình duyệt (`navigator.geolocation`) hoặc tọa độ từ địa chỉ người bệnh đã chọn, truyền vào query `latitude` & `longitude`. Trên Nurse Card hiển thị tag: `📍 Cách bạn 1.8 km`. |
-| **FE-03** | Lược bỏ các nút bấm trùng lặp hoặc không cần thiết (dọn ca, dọn trống). | **Chuẩn xác.** Các nút dev/test làm giao diện rườm rà, nghiệp dư và gây hoang mang cho người dùng lớn tuổi. | Rà soát toàn bộ UI Lịch trực và Danh sách ca: Ẩn/xóa hoàn toàn các nút "Xóa ca nháp", "Dọn slot rác". Việc giải phóng ca quá hạn đã có Backend Auto-Expire sau 30 phút. |
-| **FE-04** | Gỡ bỏ tính năng tạo lịch nghỉ đột xuất cứng, thay bằng thông báo linh hoạt nếu book trúng lúc bận. | **Hợp lý về mặt trải nghiệm.** Không bắt điều dưỡng phải khai báo form nghỉ cả ngày cồng kềnh. | Thay nút đăng ký nghỉ cứng bằng: (1) Nút gạt nhanh **"Tạm dừng nhận ca hôm nay"** trên Header; (2) Khi có đơn đến mà bận, Điều dưỡng bấm "Bận đột xuất" -> Giao diện tự động gửi thông báo lịch sự cho khách và gợi ý điều dưỡng tương đương. |
-| **FE-05** | Đưa toàn bộ tùy chọn (thời gian, dịch vụ, người nhận) ra luồng bên ngoài; bấm "Xác nhận muốn đặt lịch" là chốt ca ngay. | **Bước đột phá về UX.** Loại bỏ wizard nhiều bước kiểu cũ. | Thiết kế 1 màn hình **Checkout/Booking Sheet duy nhất**: Gom 4 block: (1) Chọn Người bệnh; (2) Địa chỉ; (3) Gói dịch vụ & Giờ hẹn; (4) Tóm tắt tiền. Bấm "Xác nhận" -> Hiện ngay Popup VietQR PayOS để quét mã. |
-| **FE-06** | Cho phép người dùng chọn linh hoạt khung thời gian (extra thêm giờ hoặc đặt 2 ca liên tiếp). | **Cần thiết.** Người nhà thường muốn thêm 30p-1h để tâm sự hoặc làm vệ sinh phụ thêm. | Thêm bộ chọn: `Thời lượng bổ sung (Extra Time): [Không] [+30 phút] [+60 phút] [+120 phút]`. Giao diện tự động cộng tiền theo đơn giá giờ của điều dưỡng và cập nhật giờ kết thúc dự kiến. |
-| **FE-07** | Bổ sung checkbox xin ý kiến "Đồng ý chia sẻ bệnh án" tại màn hình đặt lịch. | **Bắt buộc tuân thủ pháp lý y tế.** | Ngay phía trên nút Đặt lịch, đặt checkbox:  <br>`☑ Tôi đồng ý chia sẻ tóm tắt bệnh án và lưu ý sức khỏe của người bệnh cho Điều dưỡng để phục vụ ca chăm sóc.` (Mặc định tích chọn). |
-| **FE-08** | Sắp xếp lại giao diện "Giá đề xuất thương lượng" để các con số hiển thị trực quan, dễ hiểu hơn. | **Cần minh bạch tài chính.** Tránh hiểu nhầm phí sàn là tiền điều dưỡng thu thêm. | Hiển thị bóc tách 3 dòng rõ ràng:<br>• Tiền công điều dưỡng: `250.000 đ`<br>• Phí nền tảng CareLink: `60.000 đ`<br>• **Tổng cộng thanh toán: `310.000 đ`** |
-| **FE-09** | Bổ sung nút "Từ chối giá thương lượng" cho điều dưỡng và màn hình để gia đình tiếp tục deal giá hoặc xác nhận. | **Hoàn thiện vòng lặp đàm phán (Negotiation Loop).** | Khi Điều dưỡng Counter-Offer, Family nhận được card tin nhắn kèm 2 nút: **"Chấp nhận giá mới"** (chuyển sang trả tiền) hoặc **"Thương lượng lại"** (nhập lại giá khác). |
-| **FE-10** | Rà soát và tinh chỉnh lại câu từ trên các luồng nhận ca và thanh toán. | **Tăng độ tin cậy và chuyên nghiệp.** | Chuyển đổi toàn bộ từ ngữ chuyên môn/kỹ thuật sang ngôn ngữ chăm sóc y tế chuẩn mực (xem bảng chuẩn hóa câu từ ở Mục V). |
+1. **Bước chuyển dịch lớn: Chuyển sang mô hình Slot 1 tiếng (Atomic 1-Hour Slot) dạng "Đặt vé xem phim"**
+   - Loại bỏ hoàn toàn việc gia đình tự gõ giờ tự do gây lẹm ca, vỡ lịch.
+   - Chia sẵn các slot chuẩn 1 tiếng. Khách cần 1 tiếng thì chọn 1 ô; cần 2 tiếng hoặc thêm giờ thì chọn 2 ô liên tiếp (như chọn 2 ghế cạnh nhau trong rạp phim).
+2. **Quy tắc đệm di chuyển 60 phút (Travel Buffer 60m):**
+   - Giữa 2 khách hàng khác nhau: Hệ thống **tự động khóa 60 phút di chuyển tiếp theo**. Đảm bảo điều dưỡng có đủ 1 tiếng để thu dọn đồ nghề vô khuẩn, di chuyển xe máy, chống kẹt xe đô thị và chuẩn bị tinh thần cho ca tiếp theo.
+3. **Bản chất ca trực: Tính theo Bảng dịch vụ hoàn tất (Service-based Completion), KHÔNG tính theo slot giờ cứng:**
+   - Dịch vụ y tế tại nhà đo lường bằng **chất lượng quy trình chuyên môn**, không phải bằng việc "ngồi canh đồng hồ cho hết giờ". Điều dưỡng làm xong đúng quy trình, gia đình nghiệm thu là được kết thúc ca, nộp bệnh án và ra về.
+4. **Bỏ tính năng "Tạo lịch nghỉ đột xuất cứng" (No Rigid Blackout Form):**
+   - Thay bằng cơ chế **Báo bận & Thông báo linh hoạt**: Khi khách lỡ book trúng lúc điều dưỡng có việc bận, điều dưỡng bấm từ chối -> Hệ thống tự động hoàn tiền 100%, gửi thông báo xin lỗi chu đáo và gợi ý điều dưỡng khác cùng quận cho gia đình.
+5. **Điều dưỡng tự định đoạt [Giá tiền] kèm [Thời gian mong muốn]:**
+   - Hệ thống không ép thời gian cứng của Admin. Điều dưỡng tự ước tính tay nghề của mình: dịch vụ này làm bao nhiêu phút với giá bao nhiêu.
 
 ---
 
-## ⚙️ III. ĐÁNH GIÁ & THIẾT KẾ CHI TIẾT PHÂN CÔNG BACKEND
-
----
-
-### 1. Phân công Khôi (Booking, Matchmaking, Payment)
-
-#### 🔹 Mục 1: Xây dựng API tính toán và trả về khoảng cách giữa điều dưỡng và địa chỉ khách hàng
-* **Hiện trạng mã nguồn:**
-  - `GeoUtils.HaversineKm` đã có sẵn trong `CareLinkAPI/Common/Utils/GeoUtils.cs`.
-  - Endpoint `GET /api/v1/nurses/search` đã trả `DistanceKm` nhưng chưa có API độc lập khi xem chi tiết 1 Điều dưỡng ngoài luồng search.
-* **Giải pháp Backend cho Khôi:**
-  - Bổ sung endpoint chuyên biệt:  
-    `GET /api/v1/nurses/{nurseId}/distance?addressId={addressId}&latitude={lat}&longitude={lon}`
-  - Logic: Ưu tiên lấy tọa độ từ `latitude/longitude` truyền lên; nếu không có thì lấy tọa độ của `addressId` trong bảng `addresses`; tính khoảng cách Haversine và trả về:
-    ```json
-    {
-      "nurseId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-      "distanceKm": 2.45,
-      "serviceRadiusKm": 10,
-      "isWithinCoverage": true,
-      "estimatedTravelMinutes": 8
-    }
-    ```
-
-#### 🔹 Mục 2: Nâng cấp cơ sở dữ liệu và logic tính tiền (Custom Pricing, Extra Time, Gộp ca)
-* **Hiện trạng mã nguồn:**
-  - `BookingService.CreateAsync` hiện gán cứng `TotalPrice = service.BasePrice` (chưa xét đến bảng `nurse_service_pricings` và chưa hỗ trợ nhiều dịch vụ).
-* **Giải pháp Backend cho Khôi:**
-  - **Nâng cấp CSDL (PostgreSQL Supabase):**
-    ```sql
-    -- 1. Mở rộng bảng bookings
-    ALTER TABLE public.bookings 
-    ADD COLUMN IF NOT EXISTS base_services_price NUMERIC(12,2) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS extra_minutes INT NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS extra_minutes_price NUMERIC(12,2) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(12,2) NOT NULL DEFAULT 60000;
-
-    -- 2. Đảm bảo bảng phụ lưu chi tiết combo nhiều dịch vụ trong booking
-    CREATE TABLE IF NOT EXISTS public.booking_services (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
-        service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE RESTRICT,
-        price NUMERIC(12,2) NOT NULL,
-        duration_minutes INT NOT NULL
-    );
-    ```
-  - **Công thức tính tiền có thẩm quyền (Backend Invariant):**
-    $$\text{ServicePrice} = \sum (\text{NurseServicePricing.CustomPrice} \text{ của từng dịch vụ được chọn})$$
-    $$\text{ExtraPrice} = \left(\frac{\text{ExtraMinutes}}{60}\right) \times \text{NurseHourlyRate}$$
-    $$\text{NurseEarning} = \text{ServicePrice} + \text{ExtraPrice}$$
-    $$\text{TotalPrice (Khách trả)} = \text{NurseEarning} + \mathbf{60.000\ \text{VNĐ (Phí sàn)}}$$
-  - *Tuyệt đối không nhận `totalPrice` từ FE gửi lên!*
-
-#### 🔹 Mục 3: Điều chỉnh API đặt lịch tiếp nhận toàn bộ dữ liệu cấu hình trong 1 lần gọi & Chốt đơn ngay
-* **Hiện trạng mã nguồn:**
-  - FE phải gọi `POST /api/v1/bookings` -> nhận `bookingId` -> gọi tiếp `POST /api/v1/bookings/{id}/payments` để lấy PayOS QR.
-* **Giải pháp Backend cho Khôi:**
-  - Mở rộng `CreateBookingRequest`:
-    ```csharp
-    public class CreateBookingRequest
-    {
-        public Guid NurseId { get; set; }
-        public Guid RecipientId { get; set; }
-        public List<Guid> ServiceIds { get; set; } = new(); // Hỗ trợ combo nhiều dịch vụ
-        public DateTimeOffset ScheduledStart { get; set; }
-        public int ExtraMinutes { get; set; } = 0;          // Phút phát sinh thêm
-        public Guid? AddressId { get; set; }
-        public bool ConsentShareMedicalRecords { get; set; } = true; // Checkbox bệnh án
-        public string? CustomerNotes { get; set; }
-    }
-    ```
-  - **Cơ chế "Chốt đơn ngay":**
-    Trong `BookingService.CreateAsync`, sau khi tạo booking thành công ở trạng thái `PendingPayment`, **tự động gọi luôn `PaymentService.CreatePayOsPaymentLinkAsync`** và nhúng thẳng dữ liệu thanh toán vào `BookingResponse`:
-    ```json
-    {
-      "bookingId": "...",
-      "status": "PendingPayment",
-      "totalPrice": 310000,
-      "holdExpiresAt": "2026-10-28T16:30:00Z",
-      "payment": {
-        "paymentUrl": "https://pay.payos.vn/web/...",
-        "qrCode": "vietqr_string_data...",
-        "accountNumber": "...",
-        "amount": 310000
-      }
-    }
-    ```
-    *Hiệu quả:* FE chỉ cần gọi 1 API duy nhất, nhận về hiển thị ngay mã QR PayOS cho khách quét.
-
-#### 🔹 Mục 4: Tối ưu thuật toán quét lịch (Calendar Matchmaking) theo số phút thực tế
-* **Hiện trạng mã nguồn:**
-  - Đang kiểm tra `endUtc = startUtc.AddMinutes(service.DurationMinutes)`.
-* **Giải pháp Backend cho Khôi:**
-  - Tính thời gian kết thúc thực tế theo combo và phút phụ trội:
-    $$\text{TotalMinutes} = \sum \text{Service.DurationMinutes} + \text{ExtraMinutes}$$
-    $$\text{ScheduledEndUtc} = \text{ScheduledStartUtc.AddMinutes(TotalMinutes)}$$
-  - Khi đối chiếu với `NurseAvailabilities` (`StartTime` -> `EndTime`):
-    * Kiểm tra khoảng thời gian yêu cầu nằm trọn vẹn trong khung giờ rảnh của điều dưỡng.
-    * Bổ sung **Buffer di chuyển 15-30 phút**: Không cho phép đặt ca mới nếu ca trước đó của điều dưỡng kết thúc cách ca này dưới 15 phút tại địa chỉ khác.
-
-#### 🔹 Mục 5: Cập nhật Booking State Machine xử lý luồng thương lượng giá 2 chiều
-* **Hiện trạng mã nguồn:**
-  - `BookingProposal` chỉ có 2 nhánh kết thúc: `Accepted` (sinh booking) hoặc `Rejected` (đóng vĩnh viễn).
-* **Giải pháp Backend cho Khôi:**
-  - Bổ sung trạng thái vào `ProposalStatus`:
-    ```csharp
-    public enum ProposalStatus
-    {
-        Pending = 1,
-        Accepted = 2,
-        Rejected = 3,
-        CounterOffered = 4, // Điều dưỡng báo giá mới
-        Expired = 5,
-        BookedAndPaid = 6
-    }
-    ```
-  - Bổ sung 2 endpoints trong `ConversationsController`:
-    1. `PUT /api/v1/conversations/{cId}/proposals/{pId}/counter`: Điều dưỡng nhập giá mới (`CounterPrice`) và ghi chú -> chuyển status thành `CounterOffered`.
-    2. `PUT /api/v1/conversations/{cId}/proposals/{pId}/accept-counter`: Khách hàng chấp nhận giá điều dưỡng đưa ra -> Chuyển thành `Accepted`, tự động sinh `Booking` `PendingPayment` và link PayOS giữ chỗ 30 phút.
-
-#### 🔹 Mục Note thêm: Sửa API dịch vụ điều dưỡng — cho phép điều dưỡng ghi thời gian mong muốn
-* **Hiện trạng mã nguồn:**
-  - Bảng `nurse_service_pricings` chỉ có `custom_price` và `is_offered`. Cột `duration_minutes` bị fix theo bảng `services` của hệ thống.
-* **Giải pháp Backend cho Khôi:**
-  - Thêm cột `custom_duration_minutes INT NULL` vào bảng `nurse_service_pricings`.
-  - Cập nhật DTO `UpdateServicePricingItemRequest`:
-    ```csharp
-    public class UpdateServicePricingItemRequest
-    {
-        public Guid ServiceId { get; set; }
-        public decimal CustomPrice { get; set; }
-        public int? CustomDurationMinutes { get; set; } // Thời lượng điều dưỡng mong muốn
-        public bool IsOffered { get; set; } = true;
-    }
-    ```
-  - Khi điều dưỡng nhận dịch vụ tắm bệnh nhân, họ có thể ghi 45 phút thay vì 30 phút mặc định. Hệ thống sẽ ưu tiên dùng `CustomDurationMinutes ?? Service.DurationMinutes`.
-
----
-
-### 2. Phân công Quốc (Profile, Notification, User)
-
-#### 🔹 Mục 1: Thiết lập logic tự động gửi thông báo hủy/bận đến gia đình nếu điều dưỡng có việc đột xuất
-* **Hiện trạng mã nguồn:**
-  - Trong `NurseProfileService.AddNurseUnavailabilityAsync`, khi điều dưỡng thêm ngày nghỉ, hệ thống chỉ insert vào bảng `nurse_unavailabilities` mà **không hề rà soát các booking đã tồn tại trong ngày đó**.
-* **Giải pháp Backend cho Quốc:**
-  - Khi điều dưỡng báo bận/nghỉ đột xuất ngày $D$:
-    1. Quét toàn bộ các ca trực của điều dưỡng vào ngày $D$ có trạng thái: `PendingPayment`, `PendingAcceptance`, `Accepted`.
-    2. Tự động chuyển các ca này sang trạng thái `Canceled` với `CanceledBy = Nurse` và `CancellationReason = "Điều dưỡng có việc đột xuất: " + request.Reason`.
-    3. Nếu ca đã thanh toán (`Accepted` / `Paid`), kích hoạt `Refund` hoặc đưa vào hàng đợi hoàn tiền tự động qua Escrow.
-    4. Gọi `INotificationRepository.AddAsync` gửi thông báo Notification chuông và Email tới Khách hàng:
-       > *"CareLink thông báo: Ca chăm sóc [Mã đơn] vào ngày [Ngày] đã bị hủy do Điều dưỡng có lịch đột xuất không thể sắp xếp. Số tiền đặt chỗ [xxx.000đ] đang được hoàn lại 100% vào tài khoản của bạn."*
-    5. Bắn tin nhắn hệ thống (`MessageType.SystemNotification`) vào khung chat giữa hai bên để lưu vết.
-
-#### 🔹 Mục 2: Bổ sung trường dữ liệu (boolean) vào hồ sơ người nhận để lưu trạng thái chia sẻ bệnh án
-* **Hiện trạng mã nguồn:**
-  - Bảng `care_recipients` đã có `medical_history`, `special_notes` nhưng chưa có cờ lưu ý kiến đồng ý (Consent Flag).
-* **Giải pháp Backend cho Quốc:**
-  - **Migration CSDL:**
-    ```sql
-    ALTER TABLE public.care_recipients
-    ADD COLUMN IF NOT EXISTS is_medical_record_shared BOOLEAN NOT NULL DEFAULT true;
-    ```
-  - **Cập nhật DTO:** Mở rộng `CareRecipientResponse`, `CreateCareRecipientRequest`, `UpdateCareRecipientRequest` thêm field `bool IsMedicalRecordShared { get; set; } = true;`.
-  - **Logic bảo vệ dữ liệu (Privacy Guard):**
-    Trong `BookingService.GetByIdAsync` và `HealthRecordsController`:
-    Nếu `recipient.IsMedicalRecordShared == false` và người gọi API là Điều dưỡng (không phải chủ sở hữu người bệnh hay Admin):
-    ```csharp
-    if (!recipient.IsMedicalRecordShared && actor.Role == UserRole.Nurse)
-    {
-        response.RecipientMedicalHistory = "Gia đình chọn bảo mật thông tin bệnh án chi tiết.";
-    }
-    ```
-
----
-
-## 🔄 IV. MA TRẬN PHÂN CÔNG (RACI) & BẢN ĐỒ PHỤ THUỘC (DEPENDENCY MAP)
-
-### 1. Bản đồ phụ thuộc (Frontend phụ thuộc gì ở Backend?)
+## 🎬 II. KIẾN TRÚC BOOKING MỚI: "ĐẶT VÉ XEM PHIM" (CINEMA-STYLE SLOT PICKER)
 
 ```mermaid
-graph TD
-    subgraph BACKEND_TASKS [Nhiệm vụ Backend]
-        B1["Khôi: CustomDuration & CustomPricing CSDL"]
-        B2["Khôi: API Tính khoảng cách (Distance API)"]
-        B3["Khôi: API Đặt lịch 1 chạm (Booking + VietQR Payload)"]
-        B4["Khôi: State Machine Đàm phán 2 chiều (Counter-Offer)"]
-        B5["Quốc: Bổ sung cờ Consent Bệnh án vào Recipient"]
-        B6["Quốc: Logic tự động hủy ca & Bắn thông báo khi điều dưỡng bận"]
-    end
-
-    subgraph FRONTEND_TASKS [Nhiệm vụ Frontend]
-        F1["Vy/Nguyên: UI Đặt lịch 1 màn hình (Order Sheet)"]
-        F2["Vy/Nguyên: Thẻ điều dưỡng hiển thị km khoảng cách"]
-        F3["Vy/Nguyên: Màn hình Chat đàm phán giá 2 chiều"]
-        F4["Vy/Nguyên: Checkbox đồng ý chia sẻ bệnh án"]
-        F5["Vy/Nguyên: Bỏ nút dọn ca nháp & tinh chỉnh từ ngữ"]
-    end
-
-    B1 --> F1
-    B2 --> F2
-    B3 --> F1
-    B4 --> F3
-    B5 --> F4
-    B6 --> F5
+flowchart TD
+    A["BƯỚC 1: Chọn Người bệnh & Địa chỉ"] --> B["BƯỚC 2: Chọn Dịch vụ của Điều dưỡng<br>(Xem Giá tiền & Số phút do Điều dưỡng tự cài)"]
+    B --> C["BƯỚC 3: CHỌN SUẤT TRỰC (CINEMA SLOTS 1 TIẾNG)<br>• Cùng khách hàng: Chọn liền 1-2 slot liên tiếp<br>• Khách khác: Tự động khóa đệm 60p di chuyển"]
+    C --> D["BƯỚC 4: Tích chọn 'Đồng ý chia sẻ bệnh án'<br>& Bấm 'Xác nhận đặt lịch'"]
+    D --> E["HIỆN POPUP VIETQR PAYOS THANH TOÁN (GIỮ CHỖ 30 PHÚT)"]
 ```
 
-### 2. Ma trận phân công trách nhiệm (RACI Matrix)
+### 1. Quy tắc hiển thị lưới Ca trực (Slot Grid)
+Mỗi ngày làm việc của Điều dưỡng được chia thành các slot chuẩn **1 tiếng (60 phút)**:
+- `Slot 1:` 08:00 – 09:00
+- `Slot 2:` 09:00 – 10:00
+- `Slot 3:` 10:00 – 11:00
+- `Slot 4:` 11:00 – 12:00
+- *(Nghỉ trưa: 12:00 – 13:30)*
+- `Slot 5:` 13:30 – 14:30
+- `Slot 6:` 14:30 – 15:30
+- `Slot 7:` 15:30 – 16:30
+- `Slot 8:` 16:30 – 17:30
 
-| Hạng mục công việc | Khôi (BE) | Quốc (BE) | Vy (FE) | Nguyên (FE) | Ghi chú nghiệm thu |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **API Khoảng cách & Hiển thị km trên thẻ** | **A / R** | C | **R** | C | Phải test được trường hợp có GPS và không có GPS |
-| **Custom Duration & Giá dịch vụ điều dưỡng** | **A / R** | I | C | **R** | Điều dưỡng chỉnh được cả giá lẫn số phút mong muốn |
-| **API Đặt lịch 1 lần trả ngay mã QR** | **A / R** | C | **R** | C | Khách bấm 1 nút là thấy ngay mã VietQR PayOS |
-| **Luồng đàm phán giá 2 chiều trong Chat** | **A / R** | C | **R** | **R** | Nurse có nút Đề xuất giá mới; Family có nút Đồng ý/Deal tiếp |
-| **Tự động hủy ca & Bắn thông báo khi bận** | I | **A / R** | C | **R** | Huỷ các ca trùng và gửi thông báo chuông + hoàn tiền |
-| **Checkbox chia sẻ bệnh án & Bảo mật hồ sơ**| C | **A / R** | **R** | C | Ẩn tiền sử bệnh án nếu không được cấp quyền |
-| **Gọt giũa UX: Bỏ nút rác & Chuẩn hóa từ ngữ**| I | I | **A / R** | **A / R** | Bỏ nút "dọn ca", chuẩn hóa tiếng Việt thân thiện |
+Chỗ này cho thời gian từ 6h đến 22h đi ko cần nghỉ trưa
 
-*(Chú thích: **A** = Accountable - Chịu trách nhiệm chính; **R** = Responsible - Thực thi trực tiếp; **C** = Consulted - Tham vấn; **I** = Informed - Được thông báo).*
+### 2. Thuật toán khóa đệm di chuyển 60 phút (Travel Buffer Algorithm)
+* **Kịch bản 1: CÙNG MỘT KHÁCH HÀNG (Đặt gộp ca / Thêm giờ):**
+  - Khách hàng chọn dịch vụ cần 90 phút hoặc muốn điều dưỡng nán lại trông cụ thêm 1 tiếng -> Khách tick chọn liền 2 slot: `[08:00 - 09:00]` và `[09:00 - 10:00]`.
+  - Hệ thống cho phép gộp liền kề vì không phát sinh di chuyển giữa 2 địa chỉ.
+* **Kịch bản 2: HAI KHÁCH HÀNG KHÁC NHAU:**
+  - Nếu Khách A đã chốt đặt ca `[08:00 - 09:00]`:
+  - Hệ thống **TỰ ĐỘNG KHÓA 60 PHÚT TIẾP THEO (`09:00 - 10:00`) LÀM THỜI GIAN DI CHUYỂN**.
+  - Khách B khi vào xem lịch chỉ thấy slot sớm nhất có thể đặt là từ **`10:00 - 11:00`** trở đi.
+  - *Ý nghĩa thực tế:* Đảm bảo 100% điều dưỡng không bị trễ hẹn, không bị stress vì kẹt xe, có đủ thời gian vệ sinh sát khuẩn đồ nghề trước khi đến nhà bệnh nhân mới.
 
 ---
 
-## 📝 V. BẢNG CHUẨN HÓA CÂU TỪ GIAO DIỆN (UI/UX DICTIONARY)
+## ⏱️ III. LÝ GIẢI NGHIỆP VỤ: KẾT THÚC CA & CƠ CHẾ TÍNH TIỀN
 
-Để buổi chấm đồ án/thuyết trình đạt điểm tối đa về độ hoàn thiện, Vy & Nguyên cần rà soát và thay thế toàn bộ từ ngữ kỹ thuật bằng thuật ngữ chuyên nghiệp sau:
+### 1. Tại sao vẫn còn trong slot giờ mà Điều dưỡng được phép kết thúc ca?
+> **Ghi chú nghiệp vụ quan trọng:** Ca chăm sóc y tế được tính theo **Gói Dịch vụ hoàn tất (Service/Task-based Completion)**, KHÔNG tính theo "chấm công ngồi đếm giờ" (Timecard-based).
 
-| Vị trí xuất hiện | Câu từ cũ / Từ ngữ kỹ thuật | Câu từ đề xuất chuẩn mực mới | Lý do thay đổi |
+* **Ví dụ thực tế:**
+  - Khách book slot 1 tiếng `08:00 - 09:00` cho dịch vụ *"Thay băng rửa vết thương chuyên sâu"*.
+  - Trong bảng giá cá nhân, Điều dưỡng đã cài đặt thời gian ước tính là **45 phút**.
+  - Điều dưỡng đến lúc 08:00, thực hiện đầy đủ quy trình chuyên môn vô khuẩn, đo huyết áp, thay băng xong lúc **08:45**. Người nhà kiểm tra vết thương hài lòng.
+* **Quyền kết ca:**
+  - Điều dưỡng **hoàn toàn có quyền bấm "Hoàn tất ca" lúc 08:45** và nộp Báo cáo chăm sóc/bệnh án.
+  - **15 phút còn lại của slot (08:45 - 09:00) là khoảng đệm an toàn**, được dùng để:
+    1. Thu dọn rác thải y tế, thu hồi dụng cụ vô trùng vào hộp chuyên dụng.
+    2. Dặn dò người nhà cách dùng thuốc và chế độ ăn uống.
+    3. Rửa tay sát khuẩn, chỉnh trang tư trang trước khi rời khỏi nhà.
+  - Khách hàng không bị tính thêm tiền và Điều dưỡng không bị coi là "về sớm bỏ ca" vì gói dịch vụ đã hoàn thành 100% chất lượng.
+
+### 2. Cơ chế tính tiền: Theo Bảng giá Dịch vụ, không tính theo slot
+* Khách thanh toán đúng số tiền của các dịch vụ đã chọn (theo bảng giá riêng của điều dưỡng) + 60.000 VNĐ phí sàn CareLink.
+* Slot 1 tiếng chỉ là **khung thời gian giữ chỗ (Time Window Allocation)** trên lịch trực, không dùng làm hệ số nhân tiền (trừ khi khách chủ động chọn thêm dịch vụ `Extra Time`).
+
+---
+
+## 🚫 IV. THAY THẾ "LỊCH NGHỈ ĐỘT XUẤT CỨNG" BẰNG "THÔNG BÁO BẬN LINH HOẠT"
+
+### 1. Vì sao bỏ "Lịch nghỉ đột xuất cứng" (Blackout Date Form)?
+- Form đăng ký nghỉ cả ngày cứng nhắc khiến điều dưỡng nếu chỉ bận 1-2 tiếng việc riêng thì bị khóa mất cả ngày, vừa mất thu nhập vừa mất khách quen.
+- Khi điều dưỡng bấm nghỉ, các ca khách đã đặt trước đó bị treo không được xử lý tự động, gây bức xúc cho gia đình.
+
+### 2. Cơ chế mới: "Báo bận & Tự động thông báo hoàn tiền linh hoạt"
+Khi gia đình lỡ book vào khung giờ mà Điều dưỡng bận việc đột xuất:
+1. **Thao tác Điều dưỡng:** Điều dưỡng nhận được yêu cầu ca, bấm nút **"Báo bận đột xuất"** -> Chọn lý do nhanh: `[Có ca cấp cứu khác]` / `[Việc gia đình gấp]` / `[Sức khỏe không đảm bảo]`.
+2. **Xử lý Backend tự động:**
+   - Đổi trạng thái Booking sang `Canceled` với `CanceledBy = Nurse`.
+   - Nếu khách đã thanh toán PayOS: Hệ thống tự động kích hoạt **hoàn tiền 100% (Refund)** qua Escrow PayOS ngay lập tức.
+   - Slot giờ đó được giải phóng.
+3. **Trải nghiệm Gia đình (Notification & Smart Suggestion):**
+   - Hệ thống bắn Notification chuông + Tin nhắn thông báo:
+     > *"CareLink thông báo: Rất tiếc, Điều dưỡng [Tên] có lịch bận đột xuất ([Lý do]) nên không thể nhận ca ngày [Ngày, Giờ]. Số tiền [xxx.000đ] đã được hoàn lại 100% vào tài khoản của bạn."*
+   - Ngay bên dưới thông báo, giao diện hiển thị 1 Bottom Sheet: **"Gợi ý Điều dưỡng thay thế tương đương"** (tự động lọc các điều dưỡng cùng chuyên môn, có cùng khung giờ rảnh và ở gần địa chỉ của khách). Khách chỉ cần 1 chạm để chuyển đơn sang điều dưỡng mới mà không cần tìm kiếm lại từ đầu.
+
+---
+
+## 👩‍💻 V. PHÂN CÔNG CHI TIẾT FRONTEND (Vy)
+
+| STT | Mã việc | Tên chức năng | Chi tiết màn hình & Trải nghiệm (UX) cần làm |
+| :---: | :---: | :--- | :--- |
+| 1 | **FE-01** | **Màn hình Điều dưỡng cài đặt Dịch vụ** | Bổ sung 2 ô nhập cho mỗi dịch vụ nhận làm: **[Giá tiền riêng (VNĐ)]** VÀ **[Thời lượng dự kiến (phút)]** (ví dụ: 45p, 60p, 90p). Không hiển thị thời gian fix cứng của Admin nữa. |
+| 2 | **FE-02** | **Lưới chọn ca kiểu Vé xem phim (Cinema Slot Picker)** | Hiển thị các ô slot 1 tiếng (`08:00-09:00`, `09:00-10:00`...). Ô trống: màu xanh; Ô kín/đệm di chuyển: làm mờ màu xám. Cho phép chạm chọn 1 hoặc nhiều ô liên tiếp. |
+| 3 | **FE-03** | **Order Sheet 1 chạm gộp chung** | Thiết kế 1 màn hình Checkout duy nhất gồm: (1) Người bệnh; (2) Địa chỉ; (3) Combo dịch vụ; (4) Lưới chọn ca rạp phim; (5) Checkbox bệnh án; (6) Nút "Xác nhận đặt lịch" -> Mở ngay Popup VietQR PayOS. |
+| 4 | **FE-04** | **Thẻ Điều dưỡng hiển thị khoảng cách km** | Lấy GPS trình duyệt (`navigator.geolocation`) hoặc tọa độ từ địa chỉ người bệnh để truyền vào query search. Hiển thị tag: `📍 Cách bạn 1.8 km`. |
+| 5 | **FE-05** | **Giao diện Chat đàm phán giá 2 chiều (Counter-Offer)** | Điều dưỡng có nút **"Đề xuất giá mới"** (nhập số tiền + lý do). Phía gia đình nhận được Card có 2 nút: **"Chấp nhận giá mới"** (đi thanh toán) hoặc **"Deal tiếp"**. |
+| 6 | **FE-06** | **Checkbox "Đồng ý chia sẻ bệnh án"** | Đặt trước nút Xác nhận đặt lịch: `☑ Tôi đồng ý chia sẻ tóm tắt bệnh án cho Điều dưỡng phụ trách ca này.` |
+| 7 | **FE-07** | **Bỏ nút rác & Giao diện Thông báo bận** | • Xóa sạch các nút dev cũ (dọn ca, dọn trống).<br>• Dựng modal hiển thị thông báo khi điều dưỡng báo bận kèm nút xem danh sách điều dưỡng gợi ý thay thế. |
+| 8 | **FE-08** | **Chuẩn hóa câu từ giao diện y tế** | Rà soát toàn bộ UI thay thuật ngữ kỹ thuật bằng tiếng Việt chuyên nghiệp (theo bảng Mục VII). |
+
+---
+
+## 👨‍💻 VI. PHÂN CÔNG CHI TIẾT BACKEND (Quốc)
+
+| STT | Mã việc | Tên chức năng | Chi tiết kỹ thuật CSDL, API & Logic nghiệp vụ cần làm |
+| :---: | :---: | :--- | :--- |
+| 1 | **BE-01** | **CSDL Cấu hình Dịch vụ Điều dưỡng** | Thêm cột `custom_duration_minutes INT NOT NULL DEFAULT 60` vào bảng `nurse_service_pricings`. Cập nhật `UpdateNurseServicePricingRequest` để điều dưỡng lưu cả Giá và Số phút mong muốn. |
+| 2 | **BE-02** | **API Sinh Slot Ca trực rạp phim & Khóa đệm 60p** | Xây dựng API: `GET /api/v1/nurses/{nurseId}/available-slots?date=YYYY-MM-DD&customerId={id}`: <br>• Chia ca theo nhịp 1 tiếng.<br>• Quét các ca đã đặt: nếu là của khách khác, **tự động đánh dấu khóa thêm 60 phút tiếp theo** làm buffer di chuyển.<br>• Trả về mảng: `[{ "startTime": "08:00", "endTime": "09:00", "isAvailable": true }, ...]`. |
+| 3 | **BE-03** | **API Đặt lịch 1 chạm trả ngay mã QR PayOS** | Nâng cấp `POST /api/v1/bookings`: Tiếp nhận danh sách `ServiceIds`, `SlotTimes`, `AddressId`, `IsConsentShared`. Tạo booking `PendingPayment` và gọi luôn `PaymentService` để trả về ngay URL/VietQR trong response duy nhất. |
+| 4 | **BE-04** | **Logic Kết ca theo Dịch vụ (Không theo slot)** | Cập nhật `BookingService.FinishAsync`: Cho phép Điều dưỡng bấm hoàn tất ca khi đã làm xong dịch vụ y tế, nộp bệnh án (dù thời gian thực tế sớm hơn thời gian kết thúc của slot). Lưu chính xác `actual_finished_at`. |
+| 5 | **BE-05** | **Logic Báo bận linh hoạt & Tự động hoàn tiền** | Nâng cấp `PUT /api/v1/bookings/{id}/reject`: Điều dưỡng chọn lý do bận -> Chuyển status `Canceled`, kích hoạt hoàn tiền tự động qua Escrow PayOS, tạo notification chuông cho gia đình và gợi ý danh sách điều dưỡng tương đương cùng quận. |
+| 6 | **BE-06** | **State Machine Đàm phán giá 2 chiều trong Chat** | Mở rộng `ProposalStatus` thêm `CounterOffered`. Thêm API: `PUT .../proposals/{id}/counter` (Điều dưỡng báo giá lại) và `PUT .../proposals/{id}/accept-counter` (Khách chấp thuận giá mới). |
+| 7 | **BE-07** | **Bảo mật dữ liệu bệnh án (Consent Flag)** | Thêm cột `is_medical_record_shared` vào `care_recipients` (và snapshot vào `bookings`). Nếu khách không tích đồng ý: ẩn tiền sử bệnh án chi tiết khi Điều dưỡng gọi API xem hồ sơ. |
+| 8 | **BE-08** | **API Tính khoảng cách độc lập** | Tạo endpoint `GET /api/v1/nurses/{nurseId}/distance?addressId={id}&latitude={lat}&longitude={lon}` sử dụng công thức Haversine có sẵn trong `GeoUtils.cs`. |
+
+---
+
+## 📝 VII. BẢNG CHUẨN HÓA CÂU TỪ GIAO DIỆN (UI/UX DICTIONARY)
+
+| Vị trí xuất hiện | Câu từ kỹ thuật cũ | Câu từ tiếng Việt chuẩn mực mới | Ý nghĩa người dùng |
 | :--- | :--- | :--- | :--- |
-| **Thẻ trạng thái đơn** | `PendingPayment` | **Đang chờ thanh toán (Giữ chỗ 30p)** | Tránh tiếng Anh, nhấn mạnh thời hạn giữ chỗ |
-| **Thẻ trạng thái đơn** | `PendingAcceptance` | **Chờ điều dưỡng xác nhận nhận ca** | Rõ ràng bên nào đang giữ quyền xử lý |
-| **Thẻ trạng thái đơn** | `Accepted` | **Đã xác nhận ca chăm sóc** | Tạo cảm giác an tâm cho gia đình |
-| **Thẻ trạng thái đơn** | `InProgress` | **Đang thực hiện chăm sóc** | Đúng tính chất y tế lâm sàng |
-| **Thẻ trạng thái đơn** | `Disputed` | **Đang khiếu nại / Cần hỗ trợ** | Thân thiện, giảm bớt căng thẳng |
-| **Màn hình thanh toán** | Phí sàn / Platform fee | **Phí bảo hiểm & Phí nền tảng (60.000đ)** | Gia đình hiểu đây là chi phí đảm bảo quyền lợi |
-| **Khung chat đàm phán**| Proposal / Tạo proposal | **Đề xuất ca chăm sóc** | Thuần Việt, dễ hiểu |
+| **Trạng thái đơn** | `PendingPayment` | **Đang chờ thanh toán (Giữ chỗ 30p)** | Rõ ràng về thời hạn giữ chỗ |
+| **Trạng thái đơn** | `PendingAcceptance` | **Chờ điều dưỡng xác nhận nhận ca** | Minh bạch bên chịu trách nhiệm |
+| **Trạng thái đơn** | `Accepted` | **Đã xác nhận ca chăm sóc** | Tạo cảm giác an tâm |
+| **Trạng thái đơn** | `InProgress` | **Đang thực hiện chăm sóc** | Đúng tính chất y tế lâm sàng |
+| **Màn hình thanh toán** | Phí sàn / Platform fee | **Phí bảo hiểm & Phí nền tảng (60.000đ)** | Gia đình hiểu đây là quyền lợi bảo hiểm |
+| **Màn hình đàm phán** | Proposal | **Đề xuất ca chăm sóc** | Thuần Việt, dễ hiểu |
 | **Nút bấm điều dưỡng** | Reject Proposal | **Từ chối đề xuất này** | Lịch sự |
-| **Nút bấm điều dưỡng** | (Chưa có) | **Đề xuất mức giá khác** | Mở luồng thương lượng 2 chiều |
-| **Nút dọn dẹp** | Dọn ca, Dọn trống | *(Xóa bỏ hoàn toàn khỏi UI)* | Không để nút debug lộ ra cho người dùng |
+| **Nút bấm điều dưỡng** | (Chưa có) | **Đề xuất mức giá khác** | Mở luồng đàm phán 2 chiều |
+| **Lịch điều dưỡng** | Dọn ca, Dọn trống | *(Xóa bỏ hoàn toàn khỏi UI)* | Xóa dấu vết debug |
+| **Lưới chọn ca** | Slots | **Khung giờ / Suất trực khả dụng** | Giống rạp chiếu phim |
 
 ---
 
-## 🚀 VI. KẾ HOẠCH HÀNH ĐỘNG THEO THỨ TỰ ƯU TIÊN (SPRINT ROADMAP)
+## 🔄 VIII. BẢN ĐỒ TƯƠNG TÁC GIỮA VY (FE) VÀ QUỐC (BE)
 
-### Giai đoạn 1: Đồng bộ Database & CSDL Core (Ưu tiên số 1 - Khôi & Quốc)
-1. **Khôi:** Viết file SQL Migration bổ sung `base_services_price`, `extra_minutes`, `extra_minutes_price`, `custom_duration_minutes` vào `bookings` và `nurse_service_pricings`.
-2. **Quốc:** Viết SQL Migration bổ sung `is_medical_record_shared` vào `care_recipients`.
-3. Cả 2 cập nhật EF Core Models (`CareLinkDbContext`, Entity classes).
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Nurse as Điều Dưỡng
+    actor Family as Gia Đình
+    participant FE as Frontend (Vy)
+    participant BE as Backend (Quốc)
+    participant PayOS as Cổng PayOS
 
-### Giai đoạn 2: Cập nhật API Backend (Khôi & Quốc)
-1. **Khôi:** 
-   - Nâng cấp `POST /api/v1/bookings` thành API đặt lịch 1 chạm (tích hợp tạo link PayOS QR trả về ngay).
-   - Nâng cấp `NursePricingController` hỗ trợ `CustomDurationMinutes`.
-   - Bổ sung luồng Counter-Offer trong `ConversationsController`.
-2. **Quốc:**
-   - Xây dựng event tự động hủy ca và gửi thông báo trong `AddNurseUnavailabilityAsync`.
-   - Cập nhật DTO `CareRecipient` và bảo mật ẩn bệnh án nếu chưa đồng ý chia sẻ.
+    Note over Nurse,BE: GIAI ĐOẠN 1: CÀI ĐẶT DỊCH VỤ CỦA ĐIỀU DƯỠNG
+    Nurse->>FE: Nhập Dịch vụ (Giá: 180k, Thời gian: 45 phút)
+    FE->>BE: PUT /api/v1/nurses/pricing/me (Lưu custom_price & custom_duration)
 
-### Giai đoạn 3: Tích hợp Giao diện Frontend (Vy & Nguyên)
-1. **Vy:**
-   - Dựng màn hình Order Sheet 1 chạm gộp chung toàn bộ tùy chọn (thời gian, combo dịch vụ, người nhận, extra time, checkbox bệnh án).
-   - Tích hợp hiển thị popup VietQR ngay khi bấm nút Đặt lịch.
-2. **Nguyên:**
-   - Gắn thông số khoảng cách `DistanceKm` lên Nurse Card.
-   - Làm giao diện Counter-Offer giá 2 chiều trong khung Chat.
-   - Rà soát câu từ, xóa các nút bấm debug (dọn ca, dọn trống).
+    Note over Family,BE: GIAI ĐOẠN 2: CHỌN DỊCH VỤ & CHỌN SLOT RẠP PHIM
+    Family->>FE: Chọn người bệnh + Chọn dịch vụ 45 phút
+    FE->>BE: GET /api/v1/nurses/{id}/available-slots?date=...
+    Note right of BE: Quét lịch rảnh + Khóa đệm 60p nếu là khách khác
+    BE-->>FE: Trả về danh sách Slot 1 tiếng (Xanh: Còn trống, Xám: Đã kín)
+    Family->>FE: Bấm chọn Slot 08:00 - 09:00 + Tích "Đồng ý chia sẻ bệnh án"
 
-### Giai đoạn 4: Kiểm thử liên thông E2E & Nghiệm thu
-- Chạy toàn bộ 65 tests hiện tại của `CareLinkAPI.Tests` + Viết thêm Unit Test cho:
-  * Tính tiền combo dịch vụ + extra time + phí sàn 60k.
-  * Luồng Counter-Offer: chuyển trạng thái Proposal từ `Pending` -> `CounterOffered` -> `Accepted`.
-  * Tự động gửi thông báo khi điều dưỡng bận đột xuất.
-- Test thực tế luồng quét mã VietQR PayOS trên sandbox.
+    Note over Family,PayOS: GIAI ĐOẠN 3: ĐẶT LỊCH 1 CHẠM & THANH TOÁN ESCROW
+    Family->>FE: Bấm "Xác nhận đặt lịch"
+    FE->>BE: POST /api/v1/bookings (Gửi full dữ liệu 1 lần)
+    BE->>PayOS: Tạo Link thanh toán PayOS VietQR
+    BE-->>FE: Trả về BookingResponse kèm paymentUrl & qrCode
+    FE-->>Family: Bật Popup VietQR quét mã thanh toán
+
+    Note over Nurse,Family: GIAI ĐOẠN 4: THỰC HIỆN CA & KẾT CA LINH HOẠT
+    Nurse->>BE: Bắt đầu ca lúc 08:00 (InProgress)
+    Note over Nurse: Thực hiện xong dịch vụ lúc 08:45 (sớm hơn hết slot)
+    Nurse->>BE: PUT /api/v1/bookings/{id}/finish (Nộp bệnh án, kết ca thành công)
+    BE-->>Family: Báo hoàn tất ca -> Gia đình đánh giá & nghiệm thu
+```
 
 ---
 
-> **Kết luận:** Những yêu cầu cô đưa ra là hoàn toàn xác đáng và giúp dự án CareLink đạt độ hoàn thiện cao, sát với sản phẩm thực tế ngoài thị trường. Nếu triển khai chuẩn chỉ theo thiết kế trên, nhóm chắc chắn sẽ ghi điểm tuyệt đối trong buổi bảo vệ đồ án!
+## 🚀 IX. KẾ HOẠCH TRIỂN KHAI THEO GIAI ĐOẠN
+
+### Giai đoạn 1: Cơ sở dữ liệu & Cấu hình dịch vụ (Quốc thực hiện trước)
+1. Viết Migration Supabase:
+   - Thêm `custom_duration_minutes` vào `nurse_service_pricings`.
+   - Thêm `is_medical_record_shared` vào `care_recipients`.
+   - Thêm `base_services_price`, `extra_minutes`, `platform_fee` vào `bookings`.
+2. Nâng cấp DTO `UpdateNurseServicePricingRequest` để Điều dưỡng lưu thời gian mong muốn.
+
+### Giai đoạn 2: API Lịch rảnh rạp phim & Khóa đệm di chuyển 60p (Quốc)
+1. Viết API `GET /api/v1/nurses/{id}/available-slots` tự động sinh các slot 1 tiếng và áp dụng rule: **Khóa đệm 60 phút giữa 2 khách hàng khác nhau**.
+2. Nâng cấp `POST /api/v1/bookings` thành API đặt lịch 1 chạm (sinh luôn link VietQR PayOS trong response).
+
+### Giai đoạn 3: Tích hợp Giao diện người dùng (Vy)
+1. Dựng Order Sheet 1 chạm: tích hợp bộ chọn dịch vụ + lưới slot 1 tiếng rạp phim + checkbox bệnh án.
+2. Hiển thị Popup VietQR quét mã giữ chỗ 30 phút.
+3. Làm giao diện Counter-Offer giá 2 chiều trong khung Chat.
+4. Xóa bỏ form đăng ký nghỉ cứng, thay bằng modal thông báo khi điều dưỡng báo bận.
+
+### Giai đoạn 4: Kiểm thử E2E & Báo cáo Giảng viên
+- Kiểm tra tính toán tiền: Đơn giá riêng của điều dưỡng + Phí sàn 60.000đ.
+- Kiểm tra kịch bản khóa đệm 60p: Khách A book 08:00 - 09:00 -> Khách B chỉ thấy slot từ 10:00 trở đi.
+- Kiểm tra kết ca linh hoạt: Dịch vụ 45p kết ca lúc 08:45 thành công.
+
+---
+
+> **Tài liệu tham chiếu:** [DOCUMENTATION_INDEX.md](file:///d:/Documents/EXE1/CareLink_BE/docs/ai/DOCUMENTATION_INDEX.md)  
+> **Trạng thái:** `ACTIVE / PROPOSAL APPROVED` — Sẵn sàng triển khai vào mã nguồn.
