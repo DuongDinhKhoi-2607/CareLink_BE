@@ -117,3 +117,24 @@ Khi gặp mâu thuẫn giữa các tài liệu hoặc giữa tài liệu với c
    - Các file như `TASK_CHECKLIST.md`, `QUOC_TASKS.md`, `FLOWS_3_4_6_IMPLEMENTATION_SUMMARY.md`, `SWAGGER_DOCUMENTATION.md` là tài liệu ghi nhận đợt công việc cũ.
    - **Tuyệt đối KHÔNG** tuân theo các chỉ dẫn đã bị thay thế (ví dụ: stack SQL Server cũ, FE tự quyết định tiền PayOS).
    - Khi phát hiện mâu thuẫn giữa tài liệu cũ và chính sách hiện hành, phải báo cáo người dùng chứ không tự ý đổi logic theo tài liệu cũ.
+
+
+---
+
+## 📂 VI. QUY ƯỚC QUẢN LÝ & TỔ CHỨC THƯ MỤC TÀI LIỆU (DOCUMENTATION GOVERNANCE)
+
+Để tránh ô nhiễm ngữ cảnh (context pollution) và bảo đảm tính ngăn nắp cho toàn bộ thành viên và AI, dự án phân chia cấu trúc tài liệu thành 4 khu vực độc lập:
+
+1. **`docs/ai/` (AI Core Context - Bất biến & Quy chuẩn):**
+   - Chỉ chứa 6 tệp chuẩn mực bắt buộc: `AI_WORKING_RULES.md`, `API_CONTRACT_AND_DOMAIN_RULES.md`, `ARCHITECTURE_DECISIONS.md`, `TESTING_AND_ACCEPTANCE.md`, `DOCUMENTATION_INDEX.md`, `WORK_STATUS.md`.
+   - **CẤM** tạo file task tạm, sprint review hay ghi chú ngắn ngày vào thư mục này.
+2. **`docs/specs/` (System Specifications & Blueprints):**
+   - Chứa toàn bộ tài liệu đặc tả kiến trúc, kế hoạch nâng cấp, audit logic, master workflow hệ thống (ví dụ: `BE_LOGIC_AUDIT_AND_IMPROVEMENT_SPEC.md`, `DANH_GIA_VA_KE_HOACH_NANG_CAP_HE_THONG_THEO_GOP_Y.md`, `CARELINK_MASTER_BUSINESS_WORKFLOW.md`).
+   - Mọi tài liệu thiết kế tính năng mới hoặc kế hoạch phân công **BẮT BUỘC** lưu tại đây.
+3. **`docs/presentations/` (Demo & Exam Presentation Scripts):**
+   - Chứa kịch bản thuyết trình, hướng dẫn demo multi-tab, tài liệu phục vụ bảo vệ đồ án/sprint review.
+4. **`docs/archive/` (Tài liệu lưu trữ lịch sử):**
+   - Chứa checklist các sprint trước, báo cáo cũ, phân tích đã hết hạn (`legacy_checklists/`, `sprint_reports/`).
+   - **CẤM AI** đọc các tài liệu trong archive để làm căn cứ lập trình tính năng mới. Không tạo file mới vào archive.
+
+> **Quy định tuyệt đối:** Cấm tạo file Markdown rải rác ngoài thư mục gốc (`root`) của repository. Mọi tài liệu mới được tạo phải đăng ký đường dẫn vào `docs/ai/DOCUMENTATION_INDEX.md`.
