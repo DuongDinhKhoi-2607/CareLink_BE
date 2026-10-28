@@ -38,7 +38,8 @@
 | 15 | [`TASK_CHECKLIST.md`](../../TASK_CHECKLIST.md) | Toàn bộ Checklist đồ án cũ (06/10) | 🔴 **`HISTORICAL`** | Checklist ban đầu của đồ án ngày 06/10/2026. | ⚠️ **CẢNH BÁO:** Ghi tech stack cũ (.NET 8 / SQL Server); hoàn toàn lỗi thời so với hiện trạng .NET 10 / Supabase. |
 | 16 | [`SWAGGER_DOCUMENTATION.md`](../../SWAGGER_DOCUMENTATION.md) | Báo cáo tích hợp Swagger UI (08/10) | 🔴 **`HISTORICAL`** | Báo cáo đợt tích hợp Swagger UI và header `X-User-Id` test tạm. | `X-User-Id` chỉ là giải pháp tạm thời lúc chưa có JWT; hiện hệ thống đã dùng JWT chuẩn. |
 | 17 | [`docs/DANH_GIA_VA_KE_HOACH_NANG_CAP_HE_THONG_THEO_GOP_Y.md`](../DANH_GIA_VA_KE_HOACH_NANG_CAP_HE_THONG_THEO_GOP_Y.md) | Đánh giá & Thiết kế nâng cấp theo góp ý GVHD | 🟢 **`ACTIVE`** *(Proposal / Design)* | Đánh giá công tâm 10 mục FE, 8 mục BE, ma trận RACI, CSDL & API contract. | Đọc trước khi triển khai các cải tiến theo yêu cầu cô. |
-| 18 | [`README.md`](../../README.md) | Hướng dẫn tổng quan repository | 🟡 **`REFERENCE`** | Hướng dẫn clone, cấu hình appsettings và chạy Backend. | Tham khảo khi thiết lập môi trường. |
+| 18 | [`docs/ai/BE_LOGIC_AUDIT_AND_IMPROVEMENT_SPEC.md`](BE_LOGIC_AUDIT_AND_IMPROVEMENT_SPEC.md) | Phản hồi kỹ thuật & Đặc tả bổ sung cho BE | 🟢 **`ACTIVE`** *(Technical Blueprint)* | Vá 3 lỗ hổng tài chính, Interval Merging quét lịch, API kiểm tra ảnh mờ, SQL migrations. | Đọc cùng file kế hoạch số 17 để triển khai code chuẩn. |
+| 19 | [`README.md`](../../README.md) | Hướng dẫn tổng quan repository | 🟡 **`REFERENCE`** | Hướng dẫn clone, cấu hình appsettings và chạy Backend. | Tham khảo khi thiết lập môi trường. |
 
 ---
 
