@@ -352,9 +352,9 @@ public class NurseSearchService(
 
             // Kiểm tra quy tắc đệm di chuyển 60 phút giữa 2 khách hàng khác nhau
             var bufferConflict = activeBookings.FirstOrDefault(b =>
-                customerId.HasValue ? b.CustomerId != customerId.Value : true
+                (!customerId.HasValue || b.CustomerId != customerId.Value)
                 && slotStartUtc < b.ScheduledEnd.AddMinutes(60)
-                && slotEndUtc > b.ScheduledEnd);
+                && slotEndUtc > b.ScheduledStart.AddMinutes(-60));
 
             if (bufferConflict != null)
             {

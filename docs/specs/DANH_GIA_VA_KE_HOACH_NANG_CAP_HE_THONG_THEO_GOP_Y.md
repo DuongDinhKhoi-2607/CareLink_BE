@@ -1,9 +1,11 @@
 # 📑 ĐÁNH GIÁ CÔNG TÂM & BẢN THIẾT KẾ NÂNG CẤP HỆ THỐNG CARELINK (V2.0)
+
 ### Dựa trên phản hồi từ Giảng viên hướng dẫn & Thống nhất mô hình Booking "Đặt vé xem phim"
 
 > **Dự án:** Nền tảng chăm sóc y tế tại nhà CareLink (`CareLink_BE` & `CareLink_FE`)  
 > **Phiên bản tài liệu:** 2.0 — Tích hợp mô hình Slot 1 tiếng, Khóa đệm 60p, Dịch vụ hoàn tất & Thông báo bận linh hoạt  
 > **Phân công trách nhiệm:**  
+>
 > - **Frontend:** Vy  
 > - **Backend:** Quốc  
 > **Nguyên tắc cốt lõi:** Bảo vệ an toàn tài chính (Escrow PayOS), trải nghiệm đặt lịch trực quan (Cinema-Style UX), và chuẩn mực bảo mật dữ liệu y tế.
@@ -39,7 +41,9 @@ flowchart TD
 ```
 
 ### 1. Quy tắc hiển thị lưới Ca trực (Slot Grid)
+
 Mỗi ngày làm việc của Điều dưỡng được chia thành các slot chuẩn **1 tiếng (60 phút)**:
+
 - `Slot 1:` 08:00 – 09:00
 - `Slot 2:` 09:00 – 10:00
 - `Slot 3:` 10:00 – 11:00
@@ -53,10 +57,11 @@ Mỗi ngày làm việc của Điều dưỡng được chia thành các slot ch
 Chỗ này cho thời gian từ 6h đến 22h đi ko cần nghỉ trưa
 
 ### 2. Thuật toán khóa đệm di chuyển 60 phút (Travel Buffer Algorithm)
+
 * **Kịch bản 1: CÙNG MỘT KHÁCH HÀNG (Đặt gộp ca / Thêm giờ):**
   - Khách hàng chọn dịch vụ cần 90 phút hoặc muốn điều dưỡng nán lại trông cụ thêm 1 tiếng -> Khách tick chọn liền 2 slot: `[08:00 - 09:00]` và `[09:00 - 10:00]`.
   - Hệ thống cho phép gộp liền kề vì không phát sinh di chuyển giữa 2 địa chỉ.
-* **Kịch bản 2: HAI KHÁCH HÀNG KHÁC NHAU:**
+- **Kịch bản 2: HAI KHÁCH HÀNG KHÁC NHAU:**
   - Nếu Khách A đã chốt đặt ca `[08:00 - 09:00]`:
   - Hệ thống **TỰ ĐỘNG KHÓA 60 PHÚT TIẾP THEO (`09:00 - 10:00`) LÀM THỜI GIAN DI CHUYỂN**.
   - Khách B khi vào xem lịch chỉ thấy slot sớm nhất có thể đặt là từ **`10:00 - 11:00`** trở đi.
@@ -67,13 +72,14 @@ Chỗ này cho thời gian từ 6h đến 22h đi ko cần nghỉ trưa
 ## ⏱️ III. LÝ GIẢI NGHIỆP VỤ: KẾT THÚC CA & CƠ CHẾ TÍNH TIỀN
 
 ### 1. Tại sao vẫn còn trong slot giờ mà Điều dưỡng được phép kết thúc ca?
+>
 > **Ghi chú nghiệp vụ quan trọng:** Ca chăm sóc y tế được tính theo **Gói Dịch vụ hoàn tất (Service/Task-based Completion)**, KHÔNG tính theo "chấm công ngồi đếm giờ" (Timecard-based).
 
-* **Ví dụ thực tế:**
+- **Ví dụ thực tế:**
   - Khách book slot 1 tiếng `08:00 - 09:00` cho dịch vụ *"Thay băng rửa vết thương chuyên sâu"*.
   - Trong bảng giá cá nhân, Điều dưỡng đã cài đặt thời gian ước tính là **45 phút**.
   - Điều dưỡng đến lúc 08:00, thực hiện đầy đủ quy trình chuyên môn vô khuẩn, đo huyết áp, thay băng xong lúc **08:45**. Người nhà kiểm tra vết thương hài lòng.
-* **Quyền kết ca:**
+- **Quyền kết ca:**
   - Điều dưỡng **hoàn toàn có quyền bấm "Hoàn tất ca" lúc 08:45** và nộp Báo cáo chăm sóc/bệnh án.
   - **15 phút còn lại của slot (08:45 - 09:00) là khoảng đệm an toàn**, được dùng để:
     1. Thu dọn rác thải y tế, thu hồi dụng cụ vô trùng vào hộp chuyên dụng.
@@ -82,19 +88,23 @@ Chỗ này cho thời gian từ 6h đến 22h đi ko cần nghỉ trưa
   - Khách hàng không bị tính thêm tiền và Điều dưỡng không bị coi là "về sớm bỏ ca" vì gói dịch vụ đã hoàn thành 100% chất lượng.
 
 ### 2. Cơ chế tính tiền: Theo Bảng giá Dịch vụ, không tính theo slot
+
 * Khách thanh toán đúng số tiền của các dịch vụ đã chọn (theo bảng giá riêng của điều dưỡng) + 60.000 VNĐ phí sàn CareLink.
-* Slot 1 tiếng chỉ là **khung thời gian giữ chỗ (Time Window Allocation)** trên lịch trực, không dùng làm hệ số nhân tiền (trừ khi khách chủ động chọn thêm dịch vụ `Extra Time`).
+- Slot 1 tiếng chỉ là **khung thời gian giữ chỗ (Time Window Allocation)** trên lịch trực, không dùng làm hệ số nhân tiền (trừ khi khách chủ động chọn thêm dịch vụ `Extra Time`).
 
 ---
 
 ## 🚫 IV. THAY THẾ "LỊCH NGHỈ ĐỘT XUẤT CỨNG" BẰNG "THÔNG BÁO BẬN LINH HOẠT"
 
 ### 1. Vì sao bỏ "Lịch nghỉ đột xuất cứng" (Blackout Date Form)?
+
 - Form đăng ký nghỉ cả ngày cứng nhắc khiến điều dưỡng nếu chỉ bận 1-2 tiếng việc riêng thì bị khóa mất cả ngày, vừa mất thu nhập vừa mất khách quen.
 - Khi điều dưỡng bấm nghỉ, các ca khách đã đặt trước đó bị treo không được xử lý tự động, gây bức xúc cho gia đình.
 
 ### 2. Cơ chế mới: "Báo bận & Tự động thông báo hoàn tiền linh hoạt"
+
 Khi gia đình lỡ book vào khung giờ mà Điều dưỡng bận việc đột xuất:
+
 1. **Thao tác Điều dưỡng:** Điều dưỡng nhận được yêu cầu ca, bấm nút **"Báo bận đột xuất"** -> Chọn lý do nhanh: `[Có ca cấp cứu khác]` / `[Việc gia đình gấp]` / `[Sức khỏe không đảm bảo]`.
 2. **Xử lý Backend tự động:**
    - Đổi trạng thái Booking sang `Canceled` với `CanceledBy = Nurse`.
@@ -195,6 +205,7 @@ sequenceDiagram
 ## 🚀 IX. KẾ HOẠCH TRIỂN KHAI THEO GIAI ĐOẠN
 
 ### Giai đoạn 1: Cơ sở dữ liệu & Cấu hình dịch vụ (Quốc thực hiện trước)
+
 1. Viết Migration Supabase:
    - Thêm `custom_duration_minutes` vào `nurse_service_pricings`.
    - Thêm `is_medical_record_shared` vào `care_recipients`.
@@ -202,21 +213,24 @@ sequenceDiagram
 2. Nâng cấp DTO `UpdateNurseServicePricingRequest` để Điều dưỡng lưu thời gian mong muốn.
 
 ### Giai đoạn 2: API Lịch rảnh rạp phim & Khóa đệm di chuyển 60p (Quốc)
+
 1. Viết API `GET /api/v1/nurses/{id}/available-slots` tự động sinh các slot 1 tiếng và áp dụng rule: **Khóa đệm 60 phút giữa 2 khách hàng khác nhau**.
 2. Nâng cấp `POST /api/v1/bookings` thành API đặt lịch 1 chạm (sinh luôn link VietQR PayOS trong response).
 
 ### Giai đoạn 3: Tích hợp Giao diện người dùng (Vy)
+
 1. Dựng Order Sheet 1 chạm: tích hợp bộ chọn dịch vụ + lưới slot 1 tiếng rạp phim + checkbox bệnh án.
 2. Hiển thị Popup VietQR quét mã giữ chỗ 30 phút.
 3. Làm giao diện Counter-Offer giá 2 chiều trong khung Chat.
 4. Xóa bỏ form đăng ký nghỉ cứng, thay bằng modal thông báo khi điều dưỡng báo bận.
 
 ### Giai đoạn 4: Kiểm thử E2E & Báo cáo Giảng viên
+
 - Kiểm tra tính toán tiền: Đơn giá riêng của điều dưỡng + Phí sàn 60.000đ.
 - Kiểm tra kịch bản khóa đệm 60p: Khách A book 08:00 - 09:00 -> Khách B chỉ thấy slot từ 10:00 trở đi.
 - Kiểm tra kết ca linh hoạt: Dịch vụ 45p kết ca lúc 08:45 thành công.
 
 ---
 
-> **Tài liệu tham chiếu:** [DOCUMENTATION_INDEX.md](file:///d:/Documents/EXE1/CareLink_BE/docs/ai/DOCUMENTATION_INDEX.md)  
+> **Tài liệu tham chiếu:** [DOCUMENTATION_INDEX.md](file:.../CareLink_BE/docs/ai/DOCUMENTATION_INDEX.md)  
 > **Trạng thái:** `ACTIVE / PROPOSAL APPROVED` — Sẵn sàng triển khai vào mã nguồn.
