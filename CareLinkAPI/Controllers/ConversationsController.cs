@@ -151,4 +151,40 @@ public class ConversationsController(IChatService chatService) : ControllerBase
         var result = await chatService.RejectProposalAsync(this.GetCurrentUserId(), conversationId, proposalId, request, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Điều dưỡng đề xuất mức giá mới hoặc thời gian điều chỉnh (Counter-Offer).
+    /// </summary>
+    [HttpPut("{conversationId:guid}/proposals/{proposalId:guid}/counter")]
+    [ProducesResponseType(typeof(ProposalActionResultResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ProposalActionResultResponse>> CounterProposal(
+        Guid conversationId,
+        Guid proposalId,
+        [FromBody] CounterProposalRequest request,
+        CancellationToken ct)
+    {
+        var result = await chatService.CounterProposalAsync(this.GetCurrentUserId(), conversationId, proposalId, request, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Khách hàng (Family) chấp nhận giá đề xuất mới từ Điều dưỡng (Accept Counter-Offer). Tự động tạo Booking chờ thanh toán.
+    /// </summary>
+    [HttpPut("{conversationId:guid}/proposals/{proposalId:guid}/accept-counter")]
+    [ProducesResponseType(typeof(ProposalActionResultResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ProposalActionResultResponse>> AcceptCounterProposal(
+        Guid conversationId,
+        Guid proposalId,
+        CancellationToken ct)
+    {
+        var result = await chatService.AcceptCounterProposalAsync(this.GetCurrentUserId(), conversationId, proposalId, ct);
+        return Ok(result);
+    }
 }
+

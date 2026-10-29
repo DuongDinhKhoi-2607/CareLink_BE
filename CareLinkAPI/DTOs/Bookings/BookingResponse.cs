@@ -63,6 +63,19 @@ public class BookingResponse
     /// <summary>Phí nền tảng CareLink cố định (60.000 VNĐ).</summary>
     public decimal PlatformFee { get; init; } = 60000;
 
+    public decimal BaseServicesPrice { get; init; }
+    public int ExtraMinutes { get; init; }
+    public decimal ExtraMinutesPrice { get; init; }
+    public bool IsMedicalRecordShared { get; init; } = true;
+    public DateTime? ActualFinishedAt { get; init; }
+    public string? CustomerNotes { get; init; }
+
+    /// <summary>Thông tin link / mã QR thanh toán PayOS trả về ngay khi đặt ca (One-shot Booking).</summary>
+    public CareLinkAPI.DTOs.Payments.CreatePaymentLinkResponse? PaymentInfo { get; set; }
+
+    /// <summary>Gợi ý các điều dưỡng tương đương thay thế khi điều dưỡng từ chối/bận đột xuất.</summary>
+    public List<CareLinkAPI.DTOs.Nurses.NurseSearchItemResponse>? SuggestedNurses { get; set; }
+
     /// <summary>Tổng tiền khách thanh toán qua PayOS Escrow (Giá dịch vụ + 60k phí sàn).</summary>
     public decimal TotalPaymentAmount => TotalPrice + PlatformFee;
 
@@ -123,6 +136,13 @@ public static class BookingMappings
             ScheduledStart = b.ScheduledStart,
             ScheduledEnd = b.ScheduledEnd,
             TotalPrice = b.TotalPrice,
+            BaseServicesPrice = b.BaseServicesPrice,
+            ExtraMinutes = b.ExtraMinutes,
+            ExtraMinutesPrice = b.ExtraMinutesPrice,
+            PlatformFee = b.PlatformFee > 0 ? b.PlatformFee : 60000,
+            IsMedicalRecordShared = b.IsMedicalRecordShared,
+            ActualFinishedAt = b.ActualFinishedAt,
+            CustomerNotes = b.CustomerNotes,
             AddressSnapshot = b.AddressSnapshot,
             Latitude = b.LatitudeSnapshot,
             Longitude = b.LongitudeSnapshot,

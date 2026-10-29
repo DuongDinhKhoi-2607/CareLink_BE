@@ -26,4 +26,6 @@ public class CreateCareRecipientRequest
 
     [Range(-180.0, 180.0)]
     public decimal? Longitude { get; set; }
+
+    public bool IsMedicalRecordShared { get; set; } = true;
 }

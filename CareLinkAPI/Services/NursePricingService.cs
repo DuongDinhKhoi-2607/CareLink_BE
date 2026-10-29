@@ -29,6 +29,7 @@ public class NursePricingService(CareLinkDbContext dbContext) : INursePricingSer
         {
             if (existingPricings.TryGetValue(service.Id, out var pricing))
             {
+                var duration = pricing.CustomDurationMinutes > 0 ? pricing.CustomDurationMinutes : service.DurationMinutes;
                 result.Add(new NurseServicePricingItemDto
                 {
                     ServiceId = service.Id,
@@ -36,7 +37,8 @@ public class NursePricingService(CareLinkDbContext dbContext) : INursePricingSer
                     Description = service.Description,
                     BasePrice = service.BasePrice,
                     CustomPrice = pricing.CustomPrice,
-                    DurationMinutes = service.DurationMinutes,
+                    DurationMinutes = duration,
+                    CustomDurationMinutes = duration,
                     IsOffered = pricing.IsOffered,
                     RequiresLicense = service.RequiresLicense
                 });
@@ -51,6 +53,7 @@ public class NursePricingService(CareLinkDbContext dbContext) : INursePricingSer
                     BasePrice = service.BasePrice,
                     CustomPrice = service.BasePrice,
                     DurationMinutes = service.DurationMinutes,
+                    CustomDurationMinutes = service.DurationMinutes,
                     IsOffered = false, // Chưa bật nhận dịch vụ này
                     RequiresLicense = service.RequiresLicense
                 });
@@ -96,9 +99,14 @@ public class NursePricingService(CareLinkDbContext dbContext) : INursePricingSer
                 throw new BadRequestException($"Dịch vụ '{service.ServiceName}' được bật nhận ca thì mức giá phải lớn hơn 0.");
             }
 
+            var customDuration = item.CustomDurationMinutes.HasValue && item.CustomDurationMinutes.Value > 0
+                ? item.CustomDurationMinutes.Value
+                : service.DurationMinutes;
+
             if (existingMap.TryGetValue(item.ServiceId, out var existing))
             {
                 existing.CustomPrice = item.CustomPrice;
+                existing.CustomDurationMinutes = customDuration;
                 existing.IsOffered = item.IsOffered;
                 existing.UpdatedAt = DateTime.UtcNow;
             }
@@ -110,6 +118,7 @@ public class NursePricingService(CareLinkDbContext dbContext) : INursePricingSer
                     NurseId = nurse.Id,
                     ServiceId = item.ServiceId,
                     CustomPrice = item.CustomPrice,
+                    CustomDurationMinutes = customDuration,
                     IsOffered = item.IsOffered,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow

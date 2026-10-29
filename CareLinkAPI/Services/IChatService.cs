@@ -56,4 +56,18 @@ public interface IChatService
         Guid proposalId,
         RejectProposalRequest? request,
         CancellationToken ct = default);
+
+    Task<ProposalActionResultResponse> CounterProposalAsync(
+        Guid userId,
+        Guid conversationId,
+        Guid proposalId,
+        CounterProposalRequest request,
+        CancellationToken ct = default);
+
+    Task<ProposalActionResultResponse> AcceptCounterProposalAsync(
+        Guid userId,
+        Guid conversationId,
+        Guid proposalId,
+        CancellationToken ct = default);
 }
+

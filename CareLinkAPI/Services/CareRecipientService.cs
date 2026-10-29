@@ -35,7 +35,13 @@ public class CareRecipientService(
                 throw new ForbiddenException("You do not have permission to view this care recipient.");
         }
 
-        return MapToResponse(recipient);
+        var response = MapToResponse(recipient);
+        if (user.Role == (int)UserRole.Nurse && !recipient.IsMedicalRecordShared)
+        {
+            response.MedicalHistory = "Gia đình chọn bảo mật thông tin bệnh án chi tiết.";
+        }
+
+        return response;
     }
 
     public async Task<CareRecipientResponse> CreateRecipientAsync(
@@ -57,6 +63,7 @@ public class CareRecipientService(
             Address = request.Address?.Trim(),
             Latitude = request.Latitude,
             Longitude = request.Longitude,
+            IsMedicalRecordShared = request.IsMedicalRecordShared,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -102,6 +109,9 @@ public class CareRecipientService(
 
         if (request.Longitude.HasValue)
             recipient.Longitude = request.Longitude.Value;
+
+        if (request.IsMedicalRecordShared.HasValue)
+            recipient.IsMedicalRecordShared = request.IsMedicalRecordShared.Value;
 
         recipientRepository.Update(recipient);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -167,6 +177,7 @@ public class CareRecipientService(
         Address = r.Address,
         Latitude = r.Latitude,
         Longitude = r.Longitude,
+        IsMedicalRecordShared = r.IsMedicalRecordShared,
         CreatedAt = r.CreatedAt
     };
 }

@@ -721,7 +721,285 @@ public class ChatService(
         }, IsolationLevel.Serializable, ct);
     }
 
+    public async Task<ProposalActionResultResponse> CounterProposalAsync(
+        Guid userId,
+        Guid conversationId,
+        Guid proposalId,
+        CounterProposalRequest request,
+        CancellationToken ct = default)
+    {
+        var actor = await ResolveActorAsync(userId, ct);
+        var conversation = await conversationRepo.GetByIdAsync(conversationId, asNoTracking: false, ct)
+                           ?? throw new NotFoundException("Conversation not found.");
+
+        EnsureParticipant(actor, conversation);
+
+        if (actor.Role != UserRole.Nurse)
+        {
+            throw new ForbiddenException("Chỉ điều dưỡng được chỉ định mới có quyền đề xuất mức giá mới.");
+        }
+
+        if (request.CounterPrice <= 0)
+        {
+            throw new BadRequestException("Mức giá đề xuất lại phải lớn hơn 0.");
+        }
+
+        return await unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var proposal = await conversationRepo.GetProposalByIdAsync(proposalId, asNoTracking: false, ct)
+                           ?? throw new NotFoundException("Proposal not found.");
+
+            if (proposal.ConversationId != conversationId)
+            {
+                throw new BadRequestException("Đề xuất không thuộc hội thoại này.");
+            }
+
+            if (proposal.Status != (int)ProposalStatus.Pending && proposal.Status != (int)ProposalStatus.CounterOffered)
+            {
+                throw new ConflictException("Đề xuất không còn ở trạng thái có thể thương lượng giá.");
+            }
+
+            var nowUtc = DateTime.UtcNow;
+
+            proposal.Status = (int)ProposalStatus.CounterOffered;
+            proposal.CounterPrice = request.CounterPrice;
+            proposal.CounterNote = request.CounterNote?.Trim();
+            proposal.UpdatedAt = nowUtc;
+
+            var noteSuffix = string.IsNullOrWhiteSpace(request.CounterNote)
+                ? string.Empty
+                : $"\nGhi chú: {request.CounterNote.Trim()}";
+
+            var eventMessage = new Message
+            {
+                Id = Guid.NewGuid(),
+                ConversationId = conversationId,
+                SenderUserId = actor.UserId,
+                Content = $"Điều dưỡng {conversation.Nurse.FullName} đã đề xuất mức giá mới cho đề xuất #{proposal.ProposalNumber}: {request.CounterPrice.ToString("N0", ViCulture)}đ{noteSuffix}",
+                Type = (int)MessageType.ProposalResponse,
+                ProposalId = proposal.Id,
+                CreatedAt = nowUtc
+            };
+
+            await conversationRepo.AddMessageAsync(eventMessage, ct);
+
+            conversation.LastMessageAt = nowUtc;
+            conversation.UpdatedAt = nowUtc;
+
+            // Gửi thông báo cho khách hàng
+            await notifications.AddAsync(new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = conversation.Customer.UserId,
+                Title = "Điều dưỡng đề xuất mức giá mới",
+                Message = $"Điều dưỡng {conversation.Nurse.FullName} đã đề xuất mức giá mới {request.CounterPrice.ToString("N0", ViCulture)}đ cho đề xuất #{proposal.ProposalNumber}.",
+                Type = NotificationTypes.ProposalCreated,
+                ReferenceId = proposal.Id,
+                IsRead = false,
+                CreatedAt = nowUtc
+            }, ct);
+
+            await unitOfWork.SaveChangesAsync(ct);
+
+            logger.LogInformation("Proposal {ProposalId} counter-offered with price {Price} by Nurse {NurseId}.",
+                proposal.Id, request.CounterPrice, conversation.NurseId);
+
+            return new ProposalActionResultResponse
+            {
+                ProposalId = proposal.Id,
+                Status = ProposalStatus.CounterOffered,
+                Message = "Đã gửi mức giá đề xuất lại thành công cho gia đình."
+            };
+        }, IsolationLevel.Serializable, ct);
+    }
+
+    public async Task<ProposalActionResultResponse> AcceptCounterProposalAsync(
+        Guid userId,
+        Guid conversationId,
+        Guid proposalId,
+        CancellationToken ct = default)
+    {
+        var actor = await ResolveActorAsync(userId, ct);
+        var conversation = await conversationRepo.GetByIdAsync(conversationId, asNoTracking: false, ct)
+                           ?? throw new NotFoundException("Conversation not found.");
+
+        EnsureParticipant(actor, conversation);
+
+        if (actor.Role != UserRole.Customer)
+        {
+            throw new ForbiddenException("Chỉ khách hàng mới có quyền chấp nhận mức giá đề xuất lại từ điều dưỡng.");
+        }
+
+        return await unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var proposal = await conversationRepo.GetProposalByIdAsync(proposalId, asNoTracking: false, ct)
+                           ?? throw new NotFoundException("Proposal not found.");
+
+            if (proposal.ConversationId != conversationId)
+            {
+                throw new BadRequestException("Đề xuất không thuộc hội thoại này.");
+            }
+
+            if (proposal.Status != (int)ProposalStatus.CounterOffered)
+            {
+                throw new ConflictException("Đề xuất không ở trạng thái chờ chấp nhận giá đề xuất lại (CounterOffered).");
+            }
+
+            if (!proposal.CounterPrice.HasValue || proposal.CounterPrice.Value <= 0)
+            {
+                throw new BadRequestException("Không tìm thấy mức giá đề xuất lại hợp lệ.");
+            }
+
+            if (proposal.BookingId.HasValue)
+            {
+                throw new ConflictException("Đề xuất này đã được tạo ca chăm sóc.");
+            }
+
+            var nowUtc = DateTime.UtcNow;
+
+            if (proposal.ScheduledStart <= nowUtc)
+            {
+                throw new BadRequestException("Thời gian bắt đầu ca chăm sóc trong đề xuất đã trôi qua.");
+            }
+
+            // Check availability and busy slots
+            var nurseIds = new[] { conversation.NurseId };
+
+            var available = await availabilities.GetAvailableNurseIdsAsync(
+                VietnamTime.DayOfWeek(proposal.ScheduledStart),
+                VietnamTime.TimeOfDay(proposal.ScheduledStart),
+                VietnamTime.TimeOfDay(proposal.ScheduledEnd),
+                nurseIds,
+                ct);
+            if (!available.Contains(conversation.NurseId))
+            {
+                throw new BusinessRuleException("Điều dưỡng không có lịch rảnh trong khung giờ được yêu cầu.");
+            }
+
+            var busy = await bookings.GetBusyNurseIdsAsync(
+                proposal.ScheduledStart,
+                proposal.ScheduledEnd,
+                nowUtc.AddMinutes(-_bookingOptions.PendingPaymentHoldMinutes),
+                nurseIds,
+                ct);
+            if (busy.Contains(conversation.NurseId))
+            {
+                throw new ConflictException("Điều dưỡng đã có ca chăm sóc khác trùng với khung giờ này.");
+            }
+
+            var finalPrice = proposal.CounterPrice.Value;
+
+            // Atomically create Booking with status PendingPayment
+            var booking = new Booking
+            {
+                Id = Guid.NewGuid(),
+                CustomerId = conversation.CustomerId,
+                NurseId = conversation.NurseId,
+                RecipientId = proposal.RecipientId,
+                ServiceId = proposal.ServiceId,
+                ScheduledStart = proposal.ScheduledStart,
+                ScheduledEnd = proposal.ScheduledEnd,
+                TotalPrice = finalPrice,
+                BaseServicesPrice = finalPrice,
+                AddressSnapshot = proposal.AddressSnapshot,
+                LatitudeSnapshot = proposal.LatitudeSnapshot,
+                LongitudeSnapshot = proposal.LongitudeSnapshot,
+                Status = (int)BookingStatus.PendingPayment,
+                ConversationId = conversationId,
+                CreatedAt = nowUtc
+            };
+
+            await bookings.AddAsync(booking, ct);
+
+            // Copy chi tiết các dịch vụ từ đề xuất sang ca trực chính thức
+            var propServices = await dbContext.BookingProposalServices
+                .Where(ps => ps.ProposalId == proposal.Id)
+                .ToListAsync(ct);
+
+            if (propServices.Count > 0)
+            {
+                foreach (var ps in propServices)
+                {
+                    dbContext.BookingServices.Add(new BookingServiceItem
+                    {
+                        Id = Guid.NewGuid(),
+                        BookingId = booking.Id,
+                        ServiceId = ps.ServiceId,
+                        Price = ps.Price,
+                        DurationMinutes = ps.DurationMinutes,
+                        CreatedAt = nowUtc
+                    });
+                }
+            }
+            else
+            {
+                dbContext.BookingServices.Add(new BookingServiceItem
+                {
+                    Id = Guid.NewGuid(),
+                    BookingId = booking.Id,
+                    ServiceId = proposal.ServiceId,
+                    Price = finalPrice,
+                    DurationMinutes = proposal.Service?.DurationMinutes ?? 0,
+                    CreatedAt = nowUtc
+                });
+            }
+
+            // Update proposal state
+            proposal.Status = (int)ProposalStatus.Accepted;
+            proposal.BookingId = booking.Id;
+            proposal.RespondedAt = nowUtc;
+            proposal.UpdatedAt = nowUtc;
+
+            // Post event message in conversation
+            var eventMessage = new Message
+            {
+                Id = Guid.NewGuid(),
+                ConversationId = conversationId,
+                SenderUserId = actor.UserId,
+                Content = $"Khách hàng đã chấp thuận mức giá đề xuất lại {finalPrice.ToString("N0", ViCulture)}đ của điều dưỡng. Ca chăm sóc #{booking.Id} đã được tạo ở trạng thái chờ thanh toán. Vui lòng hoàn tất thanh toán trong vòng {_bookingOptions.PendingPaymentHoldMinutes} phút.",
+                Type = (int)MessageType.ProposalResponse,
+                ProposalId = proposal.Id,
+                BookingId = booking.Id,
+                CreatedAt = nowUtc
+            };
+
+            await conversationRepo.AddMessageAsync(eventMessage, ct);
+
+            conversation.LastMessageAt = nowUtc;
+            conversation.UpdatedAt = nowUtc;
+
+            // Notify Nurse
+            await notifications.AddAsync(new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = conversation.Nurse.UserId,
+                Title = "Giá đề xuất lại đã được chấp thuận",
+                Message = $"Gia đình đã đồng ý mức giá đề xuất lại {finalPrice.ToString("N0", ViCulture)}đ cho ca #{proposal.ProposalNumber}. Ca #{booking.Id} đang chờ thanh toán.",
+                Type = NotificationTypes.ProposalAccepted,
+                ReferenceId = booking.Id,
+                IsRead = false,
+                CreatedAt = nowUtc
+            }, ct);
+
+            await unitOfWork.SaveChangesAsync(ct);
+
+            logger.LogInformation("Proposal {ProposalId} counter-offer accepted by Customer {CustomerId}. Booking {BookingId} created in PendingPayment.",
+                proposal.Id, conversation.CustomerId, booking.Id);
+
+            return new ProposalActionResultResponse
+            {
+                ProposalId = proposal.Id,
+                Status = ProposalStatus.Accepted,
+                BookingId = booking.Id,
+                BookingStatus = BookingStatus.PendingPayment,
+                HoldExpiresAt = nowUtc.AddMinutes(_bookingOptions.PendingPaymentHoldMinutes),
+                Message = "Chấp thuận giá đề xuất lại thành công. Ca chăm sóc đã được tạo ở trạng thái chờ thanh toán."
+            };
+        }, IsolationLevel.Serializable, ct);
+    }
+
     // ───────────────────────── Helpers ─────────────────────────
+
 
     private async Task<Actor> ResolveActorAsync(Guid userId, CancellationToken ct)
     {
@@ -906,6 +1184,8 @@ public class ChatService(
         TotalPrice = p.TotalPrice,
         Notes = p.Notes,
         Status = (ProposalStatus)p.Status,
+        CounterPrice = p.CounterPrice,
+        CounterNote = p.CounterNote,
         ResponseNote = p.ResponseNote,
         RespondedAt = p.RespondedAt,
         BookingId = p.BookingId,

@@ -26,6 +26,8 @@
 | **Luồng 5: Check-in GPS, Bệnh án lâm sàng & Soft Delete** | Team | 🥇 `Test-Passed` | `BookingsController.cs`, `BookingService.cs`, `Backoffice/HealthRecordsController.cs`, `CareRecipientService.cs` | Soft GPS check-in (cảnh báo > 500m), bệnh án lâm sàng phân quyền nghiêm ngặt, xoá mềm `CareRecipient`. |
 | **Luồng 7: Đánh giá, Khiếu nại & Admin Dashboard** | Team | 🥇 `Test-Passed` | `DisputesController.cs`, `DisputeService.cs`, `ReviewsController.cs`, `AdminDashboardController.cs` | Chuyển trạng thái `Disputed` -> `Completed`, giải quyết khiếu nại hoàn tiền/bác bỏ, Admin Dashboard phân quyền `Admin`. |
 | **Cấu hình Docker & Render Deployment** | Khôi / Team | 🥇 `Runtime-Verified` | `Dockerfile`, `render.yaml`, `Program.cs` | Đã cấu hình cổng Render động, build Docker image thành công, deploy Render ổn định. |
+| **Nâng cấp Master V3 theo góp ý Mentor (BE-01 đến BE-08)** | Quốc | 💎 `Test-Passed` | `BookingService.cs`, `NurseSearchService.cs`, `ChatService.cs`, `CareRecipientService.cs`, `NursePricingService.cs` | Hoàn thành 100% các hạng mục: Bảng giá/thời lượng điều dưỡng tùy chỉnh (BE-01), Cinema slots 06:00-22:00 buffer 60p (BE-02), One-shot Booking trả PayOS QR (BE-03), Kết ca lâm sàng `actual_finished_at` (BE-04), Linh hoạt báo bận hoàn 100% tiền + gợi ý điều dưỡng thay thế (BE-05), Đàm phán 2 chiều Counter-Offer (BE-06), Quyền riêng tư bệnh án (BE-07), API khoảng cách (BE-08). Bộ kiểm thử tự động đạt 65/65 tests passed. |
+
 
 ---
 

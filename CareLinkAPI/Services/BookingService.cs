@@ -8,8 +8,10 @@ using CareLinkAPI.Common.Options;
 using CareLinkAPI.Common.Rules;
 using CareLinkAPI.Common.Utils;
 using CareLinkAPI.DTOs.Bookings;
+using CareLinkAPI.DTOs.Nurses;
 using CareLinkAPI.Models;
 using CareLinkAPI.Repositories;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace CareLinkAPI.Services;
@@ -22,13 +24,15 @@ public class BookingService(
     ICustomerRepository customers,
     ICareRecipientRepository recipients,
     IAddressRepository addresses,
-    IServiceRepository services,
     IHealthRecordRepository healthRecords,
     INotificationRepository notifications,
     IUserRepository users,
     IWalletService walletService,
     IConversationRepository conversations,
     IUnitOfWork unitOfWork,
+    CareLinkDbContext dbContext,
+    IPaymentService paymentService,
+    INurseSearchService nurseSearchService,
     IOptions<BookingOptions> options,
     ILogger<BookingService> logger) : IBookingService
 {
@@ -61,12 +65,26 @@ public class BookingService(
                 $"The booking must start at least {_options.MinLeadTimeMinutes} minutes from now.");
         }
 
-        var service = await services.GetByIdAsync(request.ServiceId, cancellationToken)
-                      ?? throw new NotFoundException("Service not found.");
-        if (!service.IsActive)
+        // 1. Phân giải danh sách dịch vụ combo hoặc dịch vụ đơn
+        var targetServiceIds = request.ServiceIds != null && request.ServiceIds.Count > 0
+            ? request.ServiceIds.Distinct().ToList()
+            : (request.ServiceId.HasValue ? new List<Guid> { request.ServiceId.Value } : new List<Guid>());
+
+        if (targetServiceIds.Count == 0)
         {
-            throw new BadRequestException("Service is not available.");
+            throw new BadRequestException("Vui lòng chọn ít nhất một dịch vụ cho ca chăm sóc.");
         }
+
+        var selectedServices = await dbContext.Services
+            .Where(s => targetServiceIds.Contains(s.Id) && s.IsActive)
+            .ToListAsync(cancellationToken);
+
+        if (selectedServices.Count != targetServiceIds.Count)
+        {
+            throw new BadRequestException("Một hoặc nhiều dịch vụ đã chọn không tồn tại hoặc không còn hoạt động.");
+        }
+
+        var primaryService = selectedServices.First();
 
         var nurse = await nurses.GetByIdAsync(request.NurseId, cancellationToken)
                     ?? throw new NotFoundException("Nurse not found.");
@@ -79,9 +97,9 @@ public class BookingService(
             throw new BusinessRuleException("Điều dưỡng hiện đang tạm dừng nhận ca mới.");
         }
 
-        if (service.RequiresLicense && (string.IsNullOrWhiteSpace(nurse.LicenseNumber) || nurse.EducationLevel?.ToLower().Contains("sinh viên") == true))
+        if (selectedServices.Any(s => s.RequiresLicense) && (string.IsNullOrWhiteSpace(nurse.LicenseNumber) || nurse.EducationLevel?.ToLower().Contains("sinh viên") == true))
         {
-            throw new BusinessRuleException("Dịch vụ này yêu cầu Điều dưỡng có chứng chỉ hành nghề (CCHN). Sinh viên y khoa không được phép nhận ca này.");
+            throw new BusinessRuleException("Một hoặc nhiều dịch vụ yêu cầu Điều dưỡng có chứng chỉ hành nghề (CCHN). Sinh viên y khoa không được phép nhận ca này.");
         }
 
         var recipient = await recipients.GetByIdAsync(request.RecipientId, cancellationToken)
@@ -94,11 +112,52 @@ public class BookingService(
         var (addressText, latitude, longitude) =
             await ResolveAddressAsync(customerId, recipient, request.AddressId, cancellationToken);
 
-        var endUtc = startUtc.AddMinutes(service.DurationMinutes);
+        // Bảng giá riêng của điều dưỡng
+        var nursePricings = await dbContext.NurseServicePricings
+            .Where(p => p.NurseId == nurse.Id && targetServiceIds.Contains(p.ServiceId))
+            .ToDictionaryAsync(p => p.ServiceId, cancellationToken);
+
+        // Tính tổng thời lượng dịch vụ dựa vào CustomDurationMinutes nếu có
+        var servicesDurationMinutes = selectedServices.Sum(s =>
+            nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered && pricing.CustomDurationMinutes > 0
+                ? pricing.CustomDurationMinutes
+                : s.DurationMinutes);
+
+        var extraMinutes = Math.Max(0, request.ExtraMinutes);
+        var totalMinutes = servicesDurationMinutes + extraMinutes;
+
+        DateTime endUtc;
+        if (request.ScheduledEnd.HasValue && request.ScheduledEnd.Value > request.ScheduledStart)
+        {
+            endUtc = request.ScheduledEnd.Value.UtcDateTime;
+        }
+        else
+        {
+            endUtc = startUtc.AddMinutes(totalMinutes);
+        }
+
         if (!VietnamTime.IsSameLocalDay(startUtc, endUtc))
         {
             throw new BadRequestException("The booking must start and end on the same day.");
         }
+
+        // Tính giá dịch vụ thẩm quyền tại Backend: BaseServicesPrice + ExtraMinutesPrice
+        var baseServicesPrice = selectedServices.Sum(s =>
+            nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered
+                ? pricing.CustomPrice
+                : s.BasePrice);
+
+        const decimal defaultHourlyRate = 100_000m;
+        var effectiveHourlyRate = servicesDurationMinutes > 0
+            ? (baseServicesPrice / (servicesDurationMinutes / 60m))
+            : defaultHourlyRate;
+
+        var extraMinutesPrice = extraMinutes > 0
+            ? Math.Round((extraMinutes / 60m) * effectiveHourlyRate)
+            : 0m;
+
+        var totalPrice = baseServicesPrice + extraMinutesPrice;
+        const decimal platformFee = 60_000m;
 
         // Serializable: two customers racing for the same nurse/slot cannot both succeed.
         var bookingId = await unitOfWork.ExecuteInTransactionAsync(async () =>
@@ -122,15 +181,39 @@ public class BookingService(
                 throw new BusinessRuleException("Điều dưỡng đã đăng ký nghỉ vào ngày này.");
             }
 
-            var busy = await bookings.GetBusyNurseIdsAsync(
-                startUtc,
-                endUtc,
-                nowUtc.AddMinutes(-_options.PendingPaymentHoldMinutes),
-                nurseIds,
-                cancellationToken);
-            if (busy.Contains(nurse.Id))
+            // Cinema slot rule: Kiểm tra xung đột & Khóa đệm 60 phút di chuyển giữa các khách hàng khác nhau
+            var dayStartUtc = startUtc.Date;
+            var dayEndUtc = dayStartUtc.AddDays(1);
+            var dayBookings = await dbContext.Bookings
+                .Where(b => b.NurseId == nurse.Id && b.Status != (int)BookingStatus.Canceled &&
+                            b.ScheduledStart < dayEndUtc && b.ScheduledEnd > dayStartUtc)
+                .ToListAsync(cancellationToken);
+
+            var holdCutoff = nowUtc.AddMinutes(-_options.PendingPaymentHoldMinutes);
+            foreach (var b in dayBookings)
             {
-                throw new ConflictException("The nurse already has a booking during the requested time.");
+                // Bỏ qua đơn giữ chỗ đã hết hạn thanh toán
+                if (b.Status == (int)BookingStatus.PendingPayment && b.CreatedAt < holdCutoff)
+                {
+                    continue;
+                }
+
+                // Cùng 1 khách hàng: Cho phép book các slot liền kề nhau mà không bị cản bởi buffer
+                if (b.CustomerId == customerId)
+                {
+                    if (startUtc < b.ScheduledEnd && endUtc > b.ScheduledStart)
+                    {
+                        throw new ConflictException("Bạn đã có ca chăm sóc khác trùng với khung giờ này.");
+                    }
+                }
+                else
+                {
+                    // Khách hàng khác nhau: Khóa bắt buộc 60 phút di chuyển trước và sau ca
+                    if (startUtc < b.ScheduledEnd.AddMinutes(60) && endUtc > b.ScheduledStart.AddMinutes(-60))
+                    {
+                        throw new ConflictException("Khung giờ này đã bị khóa do điều dưỡng cần 60 phút di chuyển giữa 2 khách hàng khác nhau.");
+                    }
+                }
             }
 
             var booking = new Booking
@@ -139,10 +222,16 @@ public class BookingService(
                 CustomerId = customerId,
                 NurseId = nurse.Id,
                 RecipientId = recipient.Id,
-                ServiceId = service.Id,
+                ServiceId = primaryService.Id,
                 ScheduledStart = startUtc,
                 ScheduledEnd = endUtc,
-                TotalPrice = service.BasePrice,
+                TotalPrice = totalPrice,
+                BaseServicesPrice = baseServicesPrice,
+                ExtraMinutes = extraMinutes,
+                ExtraMinutesPrice = extraMinutesPrice,
+                PlatformFee = platformFee,
+                IsMedicalRecordShared = request.ConsentShareMedicalRecords,
+                CustomerNotes = request.CustomerNotes?.Trim(),
                 AddressSnapshot = addressText,
                 LatitudeSnapshot = latitude,
                 LongitudeSnapshot = longitude,
@@ -151,14 +240,51 @@ public class BookingService(
             };
 
             await bookings.AddAsync(booking, cancellationToken);
+
+            // Lưu danh sách từng dịch vụ vào BookingServices
+            foreach (var s in selectedServices)
+            {
+                var sPrice = nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered
+                    ? pricing.CustomPrice
+                    : s.BasePrice;
+                var sDuration = nursePricings.TryGetValue(s.Id, out var pricing2) && pricing2.IsOffered && pricing2.CustomDurationMinutes > 0
+                    ? pricing2.CustomDurationMinutes
+                    : s.DurationMinutes;
+
+                dbContext.BookingServices.Add(new BookingServiceItem
+                {
+                    Id = Guid.NewGuid(),
+                    BookingId = booking.Id,
+                    ServiceId = s.Id,
+                    Price = sPrice,
+                    DurationMinutes = sDuration,
+                    CreatedAt = nowUtc
+                });
+            }
+
             await unitOfWork.SaveChangesAsync(cancellationToken);
             return booking.Id;
         }, IsolationLevel.Serializable, cancellationToken);
 
         var created = await bookings.GetByIdAsync(bookingId, asNoTracking: true, cancellationToken)
                       ?? throw new NotFoundException("Booking not found.");
-        return created.ToResponse();
+
+        var response = created.ToResponse();
+
+        // One-shot Booking: Khởi tạo ngay link / mã QR thanh toán PayOS trả về cho FE
+        try
+        {
+            var paymentInfo = await paymentService.CreatePaymentLinkAsync(userId, bookingId, cancellationToken: cancellationToken);
+            response.PaymentInfo = paymentInfo;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not automatically generate PayOS payment link for booking {BookingId}.", bookingId);
+        }
+
+        return response;
     }
+
 
     // ───────────────────────── Queries ─────────────────────────
 
@@ -223,35 +349,70 @@ public class BookingService(
                 cancellationToken);
         }, cancellationToken);
 
-    public Task<BookingResponse> RejectAsync(
+    public async Task<BookingResponse> RejectAsync(
         Guid userId,
         Guid bookingId,
         RejectBookingRequest request,
-        CancellationToken cancellationToken = default) =>
-        ExecuteTransitionAsync(userId, bookingId, async (actor, booking, now) =>
+        CancellationToken cancellationToken = default)
+    {
+        var result = await ExecuteTransitionAsync(userId, bookingId, async (actor, booking, now) =>
         {
             EnsureRole(actor, UserRole.Nurse, "Chỉ điều dưỡng được phân công mới có thể từ chối ca chăm sóc.");
 
             var current = (BookingStatus)booking.Status;
-            if (current != BookingStatus.PendingAcceptance)
+            if (current != BookingStatus.PendingAcceptance && current != BookingStatus.Accepted)
             {
                 throw new ConflictException(
-                    $"Chỉ có thể từ chối ca đang chờ tiếp nhận (trạng thái hiện tại: '{BookingStateMachine.FormatStatusVi(current)}'). " +
-                    "Nếu ca đã được chấp nhận, vui lòng sử dụng chức năng hủy ca.");
+                    $"Chỉ có thể từ chối ca đang chờ tiếp nhận hoặc đã tiếp nhận (trạng thái hiện tại: '{BookingStateMachine.FormatStatusVi(current)}').");
             }
 
-            var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Điều dưỡng từ chối ca làm" : request.Reason.Trim();
-            var refund = ApplyCancellation(booking, CanceledBy.Nurse, reason, now);
+            var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Điều dưỡng bận đột xuất" : request.Reason.Trim();
+
+            // Xử lý hoàn trả Escrow 100% nếu khách đã thanh toán (BE-05)
+            var refund = 0m;
+            if (booking.Payment is { Status: (int)PaymentStatus.Paid } payment)
+            {
+                payment.Status = (int)PaymentStatus.Refunded;
+                payment.RefundedAmount = payment.Amount;
+                payment.RefundedAt = now;
+                refund = payment.Amount;
+            }
+
+            ApplyCancellation(booking, CanceledBy.Nurse, reason, now);
 
             await NotifyAsync(
                 booking.Customer.UserId,
-                "Lịch hẹn bị từ chối",
+                "Lịch hẹn bị từ chối do điều dưỡng bận đột xuất",
                 $"Điều dưỡng {booking.Nurse.FullName} không thể nhận lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. " +
-                $"Lý do: {reason}.{RefundSentence(refund)}",
+                $"Lý do: {reason}.{RefundSentence(refund)} Hệ thống đã gợi ý một số điều dưỡng thay thế phù hợp cho bạn.",
                 NotificationTypes.BookingRejected,
                 booking.Id,
                 cancellationToken);
         }, cancellationToken);
+
+        // Gợi ý danh sách điều dưỡng thay thế có kỹ năng tương đương và rảnh cùng khung giờ (BE-05)
+        try
+        {
+            var searchResult = await nurseSearchService.SearchAsync(new NurseSearchRequest
+            {
+                ServiceId = result.ServiceId,
+                StartTime = result.ScheduledStart,
+                EndTime = result.ScheduledEnd,
+                PageSize = 4
+            }, cancellationToken);
+
+            result.SuggestedNurses = searchResult.Items
+                .Where(n => n.NurseId != result.NurseId)
+                .Take(3)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not fetch suggested nurses for rejected booking {BookingId}.", bookingId);
+        }
+
+        return result;
+    }
 
     public Task<BookingResponse> StartAsync(
         Guid userId,
@@ -331,6 +492,8 @@ public class BookingService(
                 throw new BusinessRuleException("Điều dưỡng phải nộp Báo cáo y tế / Bệnh án trước khi xác nhận hoàn thành.");
             }
 
+            // Ghi nhận thời gian hoàn tất lâm sàng thực tế (Service-based task completion)
+            booking.ActualFinishedAt = now;
             booking.NurseConfirmedAt = now;
 
             // Nếu Gia đình đã xác nhận hoặc hoàn tất trực tiếp
@@ -350,6 +513,7 @@ public class BookingService(
                     cancellationToken);
             }
         }, cancellationToken);
+
 
     public Task<BookingResponse> CustomerConfirmAsync(
         Guid userId,

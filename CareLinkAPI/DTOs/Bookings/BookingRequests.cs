@@ -12,18 +12,35 @@ public class CreateBookingRequest
     [Required]
     public Guid RecipientId { get; set; }
 
-    [Required]
-    public Guid ServiceId { get; set; }
+    /// <summary>Dịch vụ chính hoặc dịch vụ đơn lẻ (giữ để tương thích ngược).</summary>
+    public Guid? ServiceId { get; set; }
 
-    /// <summary>Start of the visit (ISO 8601 with offset). End is derived from the service duration.</summary>
+    /// <summary>Danh sách các dịch vụ trong combo ca chăm sóc.</summary>
+    public List<Guid>? ServiceIds { get; set; }
+
+    /// <summary>Thời điểm bắt đầu ca trực (ISO 8601 with offset).</summary>
     [Required]
     public DateTimeOffset ScheduledStart { get; set; }
+
+    /// <summary>Thời điểm kết thúc ca trực mong muốn (nếu chọn theo slot). Nếu để trống, hệ thống tự tính từ dịch vụ + extra time.</summary>
+    public DateTimeOffset? ScheduledEnd { get; set; }
+
+    /// <summary>Số phút chăm sóc thêm ngoài gói dịch vụ chuẩn (extra time).</summary>
+    [Range(0, 480)]
+    public int ExtraMinutes { get; set; } = 0;
 
     /// <summary>
     /// Optional saved address of the customer to use for the visit.
     /// When omitted, the address stored on the care recipient is used.
     /// </summary>
     public Guid? AddressId { get; set; }
+
+    /// <summary>Checkbox đồng ý chia sẻ tóm tắt bệnh án cho điều dưỡng.</summary>
+    public bool ConsentShareMedicalRecords { get; set; } = true;
+
+    /// <summary>Ghi chú của khách hàng khi đặt ca.</summary>
+    [StringLength(1000)]
+    public string? CustomerNotes { get; set; }
 }
 
 /// <summary>Book-06: body of PUT /api/v1/bookings/{id}/cancel.</summary>

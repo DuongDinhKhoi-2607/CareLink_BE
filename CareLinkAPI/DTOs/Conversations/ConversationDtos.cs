@@ -153,6 +153,17 @@ public class RejectProposalRequest
     public string? Reason { get; set; }
 }
 
+/// <summary>Body of PUT /api/v1/conversations/{conversationId}/proposals/{proposalId}/counter (Điều dưỡng đề xuất mức giá khác).</summary>
+public class CounterProposalRequest
+{
+    [Required]
+    [Range(1000, 100_000_000, ErrorMessage = "Mức giá đề xuất tối thiểu là 1.000 VNĐ.")]
+    public decimal CounterPrice { get; set; }
+
+    [StringLength(500)]
+    public string? CounterNote { get; set; }
+}
+
 /// <summary>Booking proposal response object.</summary>
 public class BookingProposalResponse
 {
@@ -188,8 +199,10 @@ public class BookingProposalResponse
     public DateTime ScheduledStart { get; init; }
     public DateTime ScheduledEnd { get; init; }
     public decimal TotalPrice { get; init; }
+    public decimal? CounterPrice { get; init; }
+    public string? CounterNote { get; init; }
     public decimal PlatformFee { get; init; } = 60000;
-    public decimal TotalPaymentAmount => TotalPrice + PlatformFee;
+    public decimal TotalPaymentAmount => (CounterPrice ?? TotalPrice) + PlatformFee;
     public string? Notes { get; init; }
 
     public ProposalStatus Status { get; init; }
