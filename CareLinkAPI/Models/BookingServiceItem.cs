@@ -9,6 +9,7 @@ public partial class BookingServiceItem
     public Guid ServiceId { get; set; }
     public decimal Price { get; set; }
     public int DurationMinutes { get; set; }
+    public int Quantity { get; set; } = 1;
     public DateTime CreatedAt { get; set; }
 
     public virtual Booking Booking { get; set; } = null!;

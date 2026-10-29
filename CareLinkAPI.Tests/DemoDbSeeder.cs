@@ -50,8 +50,10 @@ public class DemoDbSeeder
                 service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE RESTRICT,
                 price NUMERIC(12,2) NOT NULL,
                 duration_minutes INT NOT NULL,
+                quantity INT NOT NULL DEFAULT 1,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
             );
+            ALTER TABLE public.booking_services ADD COLUMN IF NOT EXISTS quantity INT NOT NULL DEFAULT 1;
         ");
 
         _output.WriteLine("=== 1. DỌN DẸP TOÀN BỘ DỮ LIỆU CŨ ===");

@@ -65,15 +65,45 @@ public class BookingService(
                 $"The booking must start at least {_options.MinLeadTimeMinutes} minutes from now.");
         }
 
-        // 1. Phân giải danh sách dịch vụ combo hoặc dịch vụ đơn
-        var targetServiceIds = request.ServiceIds != null && request.ServiceIds.Count > 0
-            ? request.ServiceIds.Distinct().ToList()
-            : (request.ServiceId.HasValue ? new List<Guid> { request.ServiceId.Value } : new List<Guid>());
+        // 1. Phân giải danh sách dịch vụ và số lượng (ServiceItems vs ServiceIds vs ServiceId)
+        var serviceQuantityMap = new Dictionary<Guid, int>();
 
-        if (targetServiceIds.Count == 0)
+        if (request.ServiceItems != null && request.ServiceItems.Count > 0)
+        {
+            foreach (var item in request.ServiceItems)
+            {
+                var qty = Math.Clamp(item.Quantity, 1, 10);
+                if (serviceQuantityMap.ContainsKey(item.ServiceId))
+                {
+                    serviceQuantityMap[item.ServiceId] = Math.Clamp(serviceQuantityMap[item.ServiceId] + qty, 1, 10);
+                }
+                else
+                {
+                    serviceQuantityMap[item.ServiceId] = qty;
+                }
+            }
+        }
+        else if (request.ServiceIds != null && request.ServiceIds.Count > 0)
+        {
+            foreach (var id in request.ServiceIds)
+            {
+                if (serviceQuantityMap.ContainsKey(id))
+                    serviceQuantityMap[id] = Math.Clamp(serviceQuantityMap[id] + 1, 1, 10);
+                else
+                    serviceQuantityMap[id] = 1;
+            }
+        }
+        else if (request.ServiceId.HasValue)
+        {
+            serviceQuantityMap[request.ServiceId.Value] = 1;
+        }
+
+        if (serviceQuantityMap.Count == 0)
         {
             throw new BadRequestException("Vui lòng chọn ít nhất một dịch vụ cho ca chăm sóc.");
         }
+
+        var targetServiceIds = serviceQuantityMap.Keys.ToList();
 
         var selectedServices = await dbContext.Services
             .Where(s => targetServiceIds.Contains(s.Id) && s.IsActive)
@@ -117,23 +147,49 @@ public class BookingService(
             .Where(p => p.NurseId == nurse.Id && targetServiceIds.Contains(p.ServiceId))
             .ToDictionaryAsync(p => p.ServiceId, cancellationToken);
 
-        // Tính tổng thời lượng dịch vụ dựa vào CustomDurationMinutes nếu có
+        // Tính tổng thời lượng dịch vụ dựa vào CustomDurationMinutes nếu có và Số lượng (Quantity)
         var servicesDurationMinutes = selectedServices.Sum(s =>
-            nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered && pricing.CustomDurationMinutes > 0
+        {
+            var qty = serviceQuantityMap[s.Id];
+            var unitDuration = nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered && pricing.CustomDurationMinutes > 0
                 ? pricing.CustomDurationMinutes
-                : s.DurationMinutes);
+                : s.DurationMinutes;
+            return unitDuration * qty;
+        });
 
-        var extraMinutes = Math.Max(0, request.ExtraMinutes);
-        var totalMinutes = servicesDurationMinutes + extraMinutes;
+        // Tính giá dịch vụ thẩm quyền tại Backend: BaseServicesPrice = Sum(UnitPrice * Quantity)
+        var baseServicesPrice = selectedServices.Sum(s =>
+        {
+            var qty = serviceQuantityMap[s.Id];
+            var unitPrice = nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered
+                ? pricing.CustomPrice
+                : s.BasePrice;
+            return unitPrice * qty;
+        });
+
+        // Mô hình rạp phim: Slot 1 tiếng chuẩn (60 phút). Số suất trực tối thiểu cần thiết để làm xong dịch vụ
+        var minSlotsRequired = (int)Math.Ceiling(servicesDurationMinutes / 60.0);
+        if (minSlotsRequired < 1) minSlotsRequired = 1;
+        var minRequiredMinutes = minSlotsRequired * 60;
 
         DateTime endUtc;
         if (request.ScheduledEnd.HasValue && request.ScheduledEnd.Value > request.ScheduledStart)
         {
             endUtc = request.ScheduledEnd.Value.UtcDateTime;
+            var scheduledDurationMinutes = (int)Math.Round((endUtc - startUtc).TotalMinutes);
+
+            // Validation chặt chẽ: Khung giờ chọn không được ngắn hơn tổng thời lượng dịch vụ
+            if (scheduledDurationMinutes < servicesDurationMinutes)
+            {
+                throw new BadRequestException(
+                    $"Khung giờ trực đã chọn ({scheduledDurationMinutes} phút) không đủ thời lượng cho các dịch vụ y tế đã chọn ({servicesDurationMinutes} phút). " +
+                    $"Vui lòng chọn ít nhất {minSlotsRequired} suất trực liên tiếp ({minRequiredMinutes} phút).");
+            }
         }
         else
         {
-            endUtc = startUtc.AddMinutes(totalMinutes);
+            // Tự động phân bổ số suất trực 1 tiếng tròn trịa cho ca
+            endUtc = startUtc.AddMinutes(minRequiredMinutes);
         }
 
         if (!VietnamTime.IsSameLocalDay(startUtc, endUtc))
@@ -141,11 +197,14 @@ public class BookingService(
             throw new BadRequestException("The booking must start and end on the same day.");
         }
 
-        // Tính giá dịch vụ thẩm quyền tại Backend: BaseServicesPrice + ExtraMinutesPrice
-        var baseServicesPrice = selectedServices.Sum(s =>
-            nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered
-                ? pricing.CustomPrice
-                : s.BasePrice);
+        // Tính toán giờ làm thêm (Overtime / Extra Slot):
+        // Nếu khách chọn thêm suất trực ngoài số suất tối thiểu (ví dụ dịch vụ 45p cần 1 slot nhưng chọn 2 slot = 120p)
+        var totalScheduledMinutes = (int)Math.Round((endUtc - startUtc).TotalMinutes);
+        var extraMinutes = Math.Max(0, request.ExtraMinutes);
+        if (totalScheduledMinutes > minRequiredMinutes && extraMinutes == 0)
+        {
+            extraMinutes = totalScheduledMinutes - minRequiredMinutes;
+        }
 
         const decimal defaultHourlyRate = 100_000m;
         var effectiveHourlyRate = servicesDurationMinutes > 0
@@ -216,6 +275,15 @@ public class BookingService(
                 }
             }
 
+            var combinedNotes = request.CustomerNotes?.Trim();
+            if (!string.IsNullOrWhiteSpace(request.RequestedArrivalTime))
+            {
+                var arrivalTag = $"[Giờ yêu cầu có mặt: {request.RequestedArrivalTime.Trim()}]";
+                combinedNotes = string.IsNullOrWhiteSpace(combinedNotes)
+                    ? arrivalTag
+                    : $"{arrivalTag} {combinedNotes}";
+            }
+
             var booking = new Booking
             {
                 Id = Guid.NewGuid(),
@@ -231,7 +299,7 @@ public class BookingService(
                 ExtraMinutesPrice = extraMinutesPrice,
                 PlatformFee = platformFee,
                 IsMedicalRecordShared = request.ConsentShareMedicalRecords,
-                CustomerNotes = request.CustomerNotes?.Trim(),
+                CustomerNotes = combinedNotes,
                 AddressSnapshot = addressText,
                 LatitudeSnapshot = latitude,
                 LongitudeSnapshot = longitude,
@@ -241,13 +309,14 @@ public class BookingService(
 
             await bookings.AddAsync(booking, cancellationToken);
 
-            // Lưu danh sách từng dịch vụ vào BookingServices
+            // Lưu danh sách từng dịch vụ vào BookingServices (kèm Quantity)
             foreach (var s in selectedServices)
             {
-                var sPrice = nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered
+                var qty = serviceQuantityMap[s.Id];
+                var sUnitPrice = nursePricings.TryGetValue(s.Id, out var pricing) && pricing.IsOffered
                     ? pricing.CustomPrice
                     : s.BasePrice;
-                var sDuration = nursePricings.TryGetValue(s.Id, out var pricing2) && pricing2.IsOffered && pricing2.CustomDurationMinutes > 0
+                var sUnitDuration = nursePricings.TryGetValue(s.Id, out var pricing2) && pricing2.IsOffered && pricing2.CustomDurationMinutes > 0
                     ? pricing2.CustomDurationMinutes
                     : s.DurationMinutes;
 
@@ -256,8 +325,9 @@ public class BookingService(
                     Id = Guid.NewGuid(),
                     BookingId = booking.Id,
                     ServiceId = s.Id,
-                    Price = sPrice,
-                    DurationMinutes = sDuration,
+                    Price = sUnitPrice * qty,
+                    DurationMinutes = sUnitDuration * qty,
+                    Quantity = qty,
                     CreatedAt = nowUtc
                 });
             }

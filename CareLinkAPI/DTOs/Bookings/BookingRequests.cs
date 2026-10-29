@@ -3,6 +3,17 @@ using CareLinkAPI.Common.Enums;
 
 namespace CareLinkAPI.DTOs.Bookings;
 
+/// <summary>Chi tiết một dịch vụ kèm số lượng trong combo ca chăm sóc.</summary>
+public class BookingServiceItemRequest
+{
+    [Required]
+    public Guid ServiceId { get; set; }
+
+    /// <summary>Số lượng gói dịch vụ cần thực hiện (ví dụ 2 vết thương, 2 người thân...). Mặc định là 1.</summary>
+    [Range(1, 10, ErrorMessage = "Số lượng dịch vụ phải từ 1 đến 10.")]
+    public int Quantity { get; set; } = 1;
+}
+
 /// <summary>Book-01: body of POST /api/v1/bookings.</summary>
 public class CreateBookingRequest
 {
@@ -15,8 +26,11 @@ public class CreateBookingRequest
     /// <summary>Dịch vụ chính hoặc dịch vụ đơn lẻ (giữ để tương thích ngược).</summary>
     public Guid? ServiceId { get; set; }
 
-    /// <summary>Danh sách các dịch vụ trong combo ca chăm sóc.</summary>
+    /// <summary>Danh sách các dịch vụ trong combo ca chăm sóc (mỗi dịch vụ số lượng 1, giữ để tương thích ngược).</summary>
     public List<Guid>? ServiceIds { get; set; }
+
+    /// <summary>Danh sách các dịch vụ kèm số lượng trong combo ca chăm sóc.</summary>
+    public List<BookingServiceItemRequest>? ServiceItems { get; set; }
 
     /// <summary>Thời điểm bắt đầu ca trực (ISO 8601 with offset).</summary>
     [Required]
@@ -24,6 +38,10 @@ public class CreateBookingRequest
 
     /// <summary>Thời điểm kết thúc ca trực mong muốn (nếu chọn theo slot). Nếu để trống, hệ thống tự tính từ dịch vụ + extra time.</summary>
     public DateTimeOffset? ScheduledEnd { get; set; }
+
+    /// <summary>Giờ gia đình yêu cầu điều dưỡng có mặt tại nhà (ví dụ: "17:15" hoặc "Có mặt đúng 17:00").</summary>
+    [StringLength(100)]
+    public string? RequestedArrivalTime { get; set; }
 
     /// <summary>Số phút chăm sóc thêm ngoài gói dịch vụ chuẩn (extra time).</summary>
     [Range(0, 480)]

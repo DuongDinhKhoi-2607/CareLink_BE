@@ -70,6 +70,9 @@ public class BookingResponse
     public DateTime? ActualFinishedAt { get; init; }
     public string? CustomerNotes { get; init; }
 
+    /// <summary>Giờ gia đình yêu cầu điều dưỡng có mặt tại nhà.</summary>
+    public string? RequestedArrivalTime { get; init; }
+
     /// <summary>Thông tin link / mã QR thanh toán PayOS trả về ngay khi đặt ca (One-shot Booking).</summary>
     public CareLinkAPI.DTOs.Payments.CreatePaymentLinkResponse? PaymentInfo { get; set; }
 
@@ -101,6 +104,7 @@ public class BookingServiceItemDto
     public string ServiceName { get; set; } = null!;
     public decimal Price { get; set; }
     public int DurationMinutes { get; set; }
+    public int Quantity { get; set; } = 1;
 }
 
 public static class BookingMappings
@@ -111,6 +115,16 @@ public static class BookingMappings
         var customerReview = b.Reviews?.FirstOrDefault(r => r.ReviewerRole == (int)UserRole.Customer);
         var nurseReview = b.Reviews?.FirstOrDefault(r => r.ReviewerRole == (int)UserRole.Nurse);
         var latestDispute = b.Disputes?.OrderByDescending(d => d.CreatedAt).FirstOrDefault();
+
+        string? requestedArrival = null;
+        if (!string.IsNullOrWhiteSpace(b.CustomerNotes) && b.CustomerNotes.StartsWith("[Giờ yêu cầu có mặt:"))
+        {
+            var endIdx = b.CustomerNotes.IndexOf(']');
+            if (endIdx > 21)
+            {
+                requestedArrival = b.CustomerNotes.Substring(21, endIdx - 21).Trim();
+            }
+        }
 
         return new()
         {
@@ -143,6 +157,7 @@ public static class BookingMappings
             IsMedicalRecordShared = b.IsMedicalRecordShared,
             ActualFinishedAt = b.ActualFinishedAt,
             CustomerNotes = b.CustomerNotes,
+            RequestedArrivalTime = requestedArrival,
             AddressSnapshot = b.AddressSnapshot,
             Latitude = b.LatitudeSnapshot,
             Longitude = b.LongitudeSnapshot,
@@ -176,7 +191,8 @@ public static class BookingMappings
                     ServiceId = s.ServiceId,
                     ServiceName = s.Service?.ServiceName ?? string.Empty,
                     Price = s.Price,
-                    DurationMinutes = s.DurationMinutes
+                    DurationMinutes = s.DurationMinutes,
+                    Quantity = s.Quantity
                 }).ToList()
                 : new List<BookingServiceItemDto>
                 {
@@ -185,7 +201,8 @@ public static class BookingMappings
                         ServiceId = b.ServiceId,
                         ServiceName = b.Service?.ServiceName ?? string.Empty,
                         Price = b.TotalPrice,
-                        DurationMinutes = b.Service?.DurationMinutes ?? 0
+                        DurationMinutes = b.Service?.DurationMinutes ?? 0,
+                        Quantity = 1
                     }
                 }
         };

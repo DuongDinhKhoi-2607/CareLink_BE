@@ -126,4 +126,88 @@ public class BookingFlowV2Tests
         Assert.Equal(90.00m, bookingStats.CompletionRate);
         Assert.Equal(1_500_000m, availableToWithdraw);
     }
+
+    [Fact]
+    public void ServiceQuantity_MultipliesDurationAndPriceCorrectly()
+    {
+        // Gói Chăm sóc cơ bản: 200.000đ, 75 phút, chọn số lượng = 2
+        var unitPrice = 200_000m;
+        var unitDuration = 75;
+        var quantity = 2;
+
+        var totalServicePrice = unitPrice * quantity;
+        var totalServiceDuration = unitDuration * quantity;
+
+        // Mô hình rạp phim: 150 phút thì cần Ceil(150 / 60) = 3 slot 1 tiếng (180 phút)
+        var minSlotsRequired = (int)Math.Ceiling(totalServiceDuration / 60.0);
+        var minRequiredMinutes = minSlotsRequired * 60;
+
+        Assert.Equal(400_000m, totalServicePrice);
+        Assert.Equal(150, totalServiceDuration);
+        Assert.Equal(3, minSlotsRequired);
+        Assert.Equal(180, minRequiredMinutes);
+    }
+
+    [Fact]
+    public void CinemaSlot_DetectsInsufficientDuration()
+    {
+        var servicesDurationMinutes = 75; // Dịch vụ cần 75 phút
+        var minSlotsRequired = (int)Math.Ceiling(servicesDurationMinutes / 60.0); // 2 slot = 120 phút
+
+        var scheduledStart = DateTimeOffset.Parse("2026-10-29T17:00:00+07:00");
+        var scheduledEndOnlyOneSlot = DateTimeOffset.Parse("2026-10-29T18:00:00+07:00"); // Chỉ chọn 1 slot 60p
+
+        var scheduledDurationMinutes = (int)Math.Round((scheduledEndOnlyOneSlot - scheduledStart).TotalMinutes);
+
+        Assert.Equal(60, scheduledDurationMinutes);
+        Assert.True(scheduledDurationMinutes < servicesDurationMinutes); // Thiếu thời gian
+        Assert.Equal(2, minSlotsRequired);
+    }
+
+    [Fact]
+    public void CinemaSlot_CalculatesOvertimePriceWhenExtraSlotsBooked()
+    {
+        // Dịch vụ 45 phút, giá 180.000đ (cần 1 slot 60p)
+        var baseServicesPrice = 180_000m;
+        var servicesDurationMinutes = 45;
+        var minSlotsRequired = (int)Math.Ceiling(servicesDurationMinutes / 60.0); // 1 slot
+        var minRequiredMinutes = minSlotsRequired * 60; // 60 phút
+
+        // Khách hàng tick chọn 2 slot liên tiếp: 17:00 - 19:00 = 120 phút
+        var scheduledMinutes = 120;
+        var extraMinutes = scheduledMinutes - minRequiredMinutes; // 60 phút thêm
+
+        var effectiveHourlyRate = baseServicesPrice / (servicesDurationMinutes / 60m); // 180k / 0.75 = 240k/h
+        var extraMinutesPrice = Math.Round((extraMinutes / 60m) * effectiveHourlyRate); // 1h * 240k = 240k
+
+        var totalPrice = baseServicesPrice + extraMinutesPrice;
+        const decimal platformFee = 60_000m;
+        var totalPayment = totalPrice + platformFee;
+
+        Assert.Equal(60, extraMinutes);
+        Assert.Equal(240_000m, effectiveHourlyRate);
+        Assert.Equal(240_000m, extraMinutesPrice);
+        Assert.Equal(420_000m, totalPrice);
+        Assert.Equal(480_000m, totalPayment);
+    }
+
+    [Fact]
+    public void RequestedArrivalTime_ParsesFromCustomerNotesInResponse()
+    {
+        var booking = new Booking
+        {
+            Id = Guid.NewGuid(),
+            Customer = new Customer { FullName = "Nguyễn Văn A" },
+            Nurse = new Nurse { FullName = "Trần Thị B" },
+            Recipient = new CareRecipient { FullName = "Bác C" },
+            Service = new Service { ServiceName = "Chăm sóc cơ bản", DurationMinutes = 60 },
+            TotalPrice = 200_000m,
+            CustomerNotes = "[Giờ yêu cầu có mặt: 17:15] Bác hay chóng mặt khi ngồi dậy."
+        };
+
+        var response = booking.ToResponse();
+
+        Assert.Equal("17:15", response.RequestedArrivalTime);
+        Assert.Contains("[Giờ yêu cầu có mặt: 17:15]", response.CustomerNotes);
+    }
 }

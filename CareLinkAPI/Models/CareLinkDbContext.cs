@@ -1150,6 +1150,7 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.ServiceId).HasColumnName("service_id");
             entity.Property(e => e.Price).HasPrecision(12, 2).HasColumnName("price");
             entity.Property(e => e.DurationMinutes).HasColumnName("duration_minutes");
+            entity.Property(e => e.Quantity).HasDefaultValue(1).HasColumnName("quantity");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("timezone('utc'::text, now())").HasColumnName("created_at");
 
             entity.HasOne(d => d.Booking).WithMany(p => p.BookingServices)
