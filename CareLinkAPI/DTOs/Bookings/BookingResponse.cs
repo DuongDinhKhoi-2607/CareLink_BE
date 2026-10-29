@@ -26,6 +26,10 @@ public class BookingResponse
 
     public Guid RecipientId { get; init; }
     public string RecipientName { get; init; } = null!;
+    public DateOnly? RecipientDateOfBirth { get; init; }
+    public int? RecipientGender { get; init; }
+    public string? RecipientMedicalHistory { get; init; }
+    public string? RecipientSpecialNotes { get; init; }
 
     public Guid ServiceId { get; init; }
     public string ServiceName { get; init; } = null!;
@@ -117,12 +121,17 @@ public static class BookingMappings
         var latestDispute = b.Disputes?.OrderByDescending(d => d.CreatedAt).FirstOrDefault();
 
         string? requestedArrival = null;
-        if (!string.IsNullOrWhiteSpace(b.CustomerNotes) && b.CustomerNotes.StartsWith("[Giờ yêu cầu có mặt:"))
+        if (!string.IsNullOrWhiteSpace(b.CustomerNotes))
         {
-            var endIdx = b.CustomerNotes.IndexOf(']');
-            if (endIdx > 21)
+            const string startTag = "[Giờ yêu cầu có mặt:";
+            var idx = b.CustomerNotes.IndexOf(startTag, StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
             {
-                requestedArrival = b.CustomerNotes.Substring(21, endIdx - 21).Trim();
+                var endIdx = b.CustomerNotes.IndexOf(']', idx);
+                if (endIdx > idx + startTag.Length)
+                {
+                    requestedArrival = b.CustomerNotes.Substring(idx + startTag.Length, endIdx - (idx + startTag.Length)).Trim();
+                }
             }
         }
 
@@ -145,6 +154,10 @@ public static class BookingMappings
             NurseEmail = b.Nurse.User?.Email,
             RecipientId = b.RecipientId,
             RecipientName = b.Recipient.FullName,
+            RecipientDateOfBirth = b.Recipient.DateOfBirth,
+            RecipientGender = b.Recipient.Gender,
+            RecipientMedicalHistory = b.Recipient.MedicalHistory,
+            RecipientSpecialNotes = b.Recipient.SpecialNotes,
             ServiceId = b.ServiceId,
             ServiceName = b.Service?.ServiceName ?? string.Empty,
             ScheduledStart = b.ScheduledStart,
