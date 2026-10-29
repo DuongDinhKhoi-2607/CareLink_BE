@@ -37,6 +37,7 @@
 | 9 | [`docs/specs/BE_LOGIC_AUDIT_AND_IMPROVEMENT_SPEC.md`](../specs/BE_LOGIC_AUDIT_AND_IMPROVEMENT_SPEC.md) | Phản hồi kỹ thuật & Đặc tả bổ sung cho BE | 🟢 **`ACTIVE`** *(Technical Blueprint)* | Vá 3 lỗ hổng tài chính, Interval Merging quét lịch, API kiểm tra ảnh mờ, SQL migrations. | Đọc cùng file kế hoạch số 8 để triển khai code chuẩn. |
 | 10 | [`docs/specs/CARELINK_MASTER_BUSINESS_WORKFLOW.md`](../specs/CARELINK_MASTER_BUSINESS_WORKFLOW.md) | Đặc tả 7 luồng nghiệp vụ tổng thể | 🟡 **`REFERENCE`** | Tài liệu mô tả bức tranh tổng quan 7 luồng nghiệp vụ do nhóm lập. | Chứa một số link tuyệt đối cũ; đối chiếu code khi áp dụng. |
 | 11 | [`docs/specs/DEMO_ACCOUNTS_AND_FLOW_GUIDE.md`](../specs/DEMO_ACCOUNTS_AND_FLOW_GUIDE.md) | Hướng dẫn tài khoản demo & luồng dữ liệu | 🟡 **`REFERENCE`** | Danh sách tài khoản demo và dữ liệu seed mẫu. | Dùng khi test luồng và chuẩn bị demo. |
+| 12 | [`docs/specs/HUONG_DAN_FE_DAT_LICH_SLOT_RAP_PHIM_SO_LUONG_VA_GIO_YEU_CAU.md`](../specs/HUONG_DAN_FE_DAT_LICH_SLOT_RAP_PHIM_SO_LUONG_VA_GIO_YEU_CAU.md) | Hướng dẫn tích hợp Đặt lịch rạp phim & Giờ có mặt | 🟢 **`ACTIVE`** | Hướng dẫn của Quốc cho Vy về số lượng dịch vụ, Cinema slots, minSlotsRequired, requestedArrivalTime. | Tuân thủ khi nâng cấp modal DirectBookingModal và Chat. |
 
 #### C. Nhóm Kịch Bản Thuyết Trình & Demo (`docs/presentations/`)
 | STT | Tên file & Đường dẫn | Phân loại (Purpose) | Trạng thái | Thẩm quyền & Phạm vi (Authority) | Giới hạn & Cảnh báo mâu thuẫn |
