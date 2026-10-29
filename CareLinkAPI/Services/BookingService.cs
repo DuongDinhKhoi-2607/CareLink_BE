@@ -31,7 +31,6 @@ public class BookingService(
     IConversationRepository conversations,
     IUnitOfWork unitOfWork,
     CareLinkDbContext dbContext,
-    IPaymentService paymentService,
     INurseSearchService nurseSearchService,
     IOptions<BookingOptions> options,
     ILogger<BookingService> logger) : IBookingService
@@ -252,7 +251,7 @@ public class BookingService(
             foreach (var b in dayBookings)
             {
                 // Bỏ qua đơn giữ chỗ đã hết hạn thanh toán
-                if (b.Status == (int)BookingStatus.PendingPayment && b.CreatedAt < holdCutoff)
+                if (b.Status == (int)BookingStatus.PendingPayment && (b.NurseConfirmedAt ?? b.CreatedAt) < holdCutoff)
                 {
                     continue;
                 }
@@ -303,7 +302,7 @@ public class BookingService(
                 AddressSnapshot = addressText,
                 LatitudeSnapshot = latitude,
                 LongitudeSnapshot = longitude,
-                Status = (int)BookingStatus.PendingPayment,
+                Status = (int)BookingStatus.PendingAcceptance,
                 CreatedAt = nowUtc
             };
 
@@ -332,6 +331,15 @@ public class BookingService(
                 });
             }
 
+            // Gửi thông báo cho điều dưỡng về yêu cầu chăm sóc mới
+            await NotifyAsync(
+                nurse.UserId,
+                "Yêu cầu chăm sóc mới",
+                $"Bạn có yêu cầu chăm sóc mới từ {recipient.FullName} lúc {FormatTime(startUtc)}. Vui lòng xác nhận ca.",
+                NotificationTypes.BookingNewRequest,
+                booking.Id,
+                cancellationToken);
+
             await unitOfWork.SaveChangesAsync(cancellationToken);
             return booking.Id;
         }, IsolationLevel.Serializable, cancellationToken);
@@ -339,20 +347,7 @@ public class BookingService(
         var created = await bookings.GetByIdAsync(bookingId, asNoTracking: true, cancellationToken)
                       ?? throw new NotFoundException("Booking not found.");
 
-        var response = created.ToResponse();
-
-        // One-shot Booking: Khởi tạo ngay link / mã QR thanh toán PayOS trả về cho FE
-        try
-        {
-            var paymentInfo = await paymentService.CreatePaymentLinkAsync(userId, bookingId, cancellationToken: cancellationToken);
-            response.PaymentInfo = paymentInfo;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not automatically generate PayOS payment link for booking {BookingId}.", bookingId);
-        }
-
-        return response;
+        return created.ToResponse();
     }
 
 
@@ -368,7 +363,7 @@ public class BookingService(
         var filter = new BookingQueryFilter(
             CustomerId: actor.CustomerId,
             NurseId: actor.NurseId,
-            HideUnpaid: actor.Role == UserRole.Nurse,
+            HideUnpaid: false,
             Status: query.Status,
             FromUtc: query.From?.UtcDateTime,
             ToUtc: query.To?.UtcDateTime,
@@ -405,15 +400,15 @@ public class BookingService(
         ExecuteTransitionAsync(userId, bookingId, async (actor, booking, now) =>
         {
             EnsureRole(actor, UserRole.Nurse, "Chỉ điều dưỡng được phân công mới có thể tiếp nhận ca chăm sóc.");
-            BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Accepted);
+            BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.PendingPayment);
 
-            booking.Status = (int)BookingStatus.Accepted;
-            booking.AcceptedAt = now;
+            booking.Status = (int)BookingStatus.PendingPayment;
+            booking.NurseConfirmedAt = now;
 
             await NotifyAsync(
                 booking.Customer.UserId,
-                "Lịch hẹn đã được xác nhận",
-                $"Điều dưỡng {booking.Nurse.FullName} đã nhận lịch hẹn của bạn lúc {FormatTime(booking.ScheduledStart)}.",
+                "Điều dưỡng đã tiếp nhận ca - Vui lòng thanh toán",
+                $"Điều dưỡng {booking.Nurse.FullName} đã nhận lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Vui lòng thanh toán trong vòng {_options.PendingPaymentHoldMinutes} phút để xác nhận ca.",
                 NotificationTypes.BookingAccepted,
                 booking.Id,
                 cancellationToken);
@@ -708,20 +703,16 @@ public class BookingService(
                 }
             }
 
-            // Nobody else knows about a booking that was never paid, so there is nobody to notify.
-            if (previous != BookingStatus.PendingPayment)
-            {
-                var recipientUserId = canceledBy == CanceledBy.Customer ? booking.Nurse.UserId : booking.Customer.UserId;
-                var refundText = canceledBy == CanceledBy.Nurse ? RefundSentence(refund) : string.Empty;
+            var recipientUserId = canceledBy == CanceledBy.Customer ? booking.Nurse.UserId : booking.Customer.UserId;
+            var refundText = canceledBy == CanceledBy.Nurse ? RefundSentence(refund) : string.Empty;
 
-                await NotifyAsync(
-                    recipientUserId,
-                    "Lịch hẹn đã bị hủy",
-                    $"{who} đã hủy lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Lý do: {reason}.{refundText}",
-                    NotificationTypes.BookingCanceled,
-                    booking.Id,
-                    cancellationToken);
-            }
+            await NotifyAsync(
+                recipientUserId,
+                "Lịch hẹn đã bị hủy",
+                $"{who} đã hủy lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Lý do: {reason}.{refundText}",
+                NotificationTypes.BookingCanceled,
+                booking.Id,
+                cancellationToken);
         }, cancellationToken);
 
     // ───────────────────────── Book-07: auto reject ─────────────────────────
@@ -909,12 +900,6 @@ public class BookingService(
                 return;
 
             case UserRole.Nurse when booking.NurseId == actor.NurseId:
-                // The nurse only learns about a request once it has been paid.
-                if ((BookingStatus)booking.Status == BookingStatus.PendingPayment && booking.Payment?.Status != (int)PaymentStatus.Paid)
-                {
-                    throw new NotFoundException("Booking not found.");
-                }
-
                 return;
 
             default:

@@ -98,7 +98,7 @@ public class BookingRepository(CareLinkDbContext db) : IBookingRepository
                         && b.ScheduledStart < bufferedEndUtc
                         && b.ScheduledEnd > bufferedStartUtc
                         && (lockingStatuses.Contains(b.Status)
-                            || (b.Status == pendingPayment && b.CreatedAt >= pendingPaymentCutoffUtc)));
+                            || (b.Status == pendingPayment && (b.NurseConfirmedAt ?? b.CreatedAt) >= pendingPaymentCutoffUtc)));
 
         if (excludeBookingId.HasValue)
         {
@@ -144,7 +144,7 @@ public class BookingRepository(CareLinkDbContext db) : IBookingRepository
             .Include(b => b.Customer)
             .Include(b => b.Nurse)
             .Include(b => b.Payment)
-            .Where(b => b.Status == pendingPayment && b.CreatedAt <= createdBeforeUtc)
+            .Where(b => b.Status == pendingPayment && (b.NurseConfirmedAt ?? b.CreatedAt) <= createdBeforeUtc)
             .OrderBy(b => b.CreatedAt)
             .Take(take)
             .ToListAsync(cancellationToken);

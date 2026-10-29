@@ -38,18 +38,20 @@
 
 ---
 
-### 📝 ADR-003: Luồng Chuyển Trạng Thái Đàm Phán Ca Trong Khung Chat (`EnsureCanTransitionProposal`)
-- **Trạng thái:** `Accepted` (Cập nhật chuẩn xác theo Swagger `/openapi/v1.json`)
-- **Ngày quyết định:** 19/10/2026 (Cập nhật 21/10/2026)
+### 📝 ADR-003: Hợp Nhất Luồng Đặt Lịch & Đàm Phán Ca: Điều Dưỡng Xác Nhận Trước, Gia Đình Thanh Toán Sau
+- **Trạng thái:** `Accepted` (Triển khai đồng bộ cả Direct Booking & Chat Proposal)
+- **Ngày quyết định:** 29/10/2026
 - **Bối cảnh:**
-  - Trong luồng đàm phán Chat (`BookingProposal`), Family tạo đề xuất (`POST /api/v1/conversations/{id}/proposals`), sau đó Caregiver xem xét và chấp thuận (`PUT /api/v1/conversations/{conversationId}/proposals/{proposalId}/accept`).
-  - Khi Caregiver chấp thuận, hệ thống sinh Booking ở trạng thái `PendingPayment` và giữ chỗ trong **30 phút**.
-  - Khi Khách hàng thanh toán PayOS thành công, ca trực không cần qua bước `PendingAcceptance` nữa (vì điều dưỡng đã đồng ý từ trước), mà được phép chuyển thẳng sang `Accepted`.
+  - Luồng cũ: Khách hàng book trực tiếp phải thanh toán cọc trước (`PendingPayment`) rồi mới chờ điều dưỡng nhận (`PendingAcceptance`). Nếu điều dưỡng bận/từ chối, hệ thống phải xử lý hoàn tiền (Refund), gây tốn kém chi phí giao dịch và làm khách hàng bị giam tiền oan.
 - **Quyết định:**
-  - Trong `BookingStateMachine.cs`, bổ sung hàm `EnsureCanTransitionProposal`:
-    - Cho phép ngoại lệ chuyển thẳng từ `PendingPayment` -> `Accepted` khi thanh toán thành công trong luồng Proposal.
+  - Hợp nhất cả luồng Đặt lịch trực tiếp và Đàm phán trong Chat vào một triết lý đồng nhất:
+    1. Đặt ca / Đề xuất: Ban đầu ở `PendingAcceptance` (với ca trực tiếp) hoặc `Proposal Pending` (với chat).
+    2. Điều dưỡng duyệt & chốt giá (`PUT /bookings/{id}/accept` hoặc `PUT /proposals/{id}/accept`): Ca chuyển sang `PendingPayment` với cơ chế giữ slot 30 phút (`PendingPaymentHoldMinutes`).
+    3. Gia đình thanh toán PayOS: Khi thanh toán thành công, ca chuyển thẳng sang `Accepted` (kích hoạt ca).
 - **Hệ quả:**
-  - Tối ưu hóa trải nghiệm đàm phán, ca chăm sóc được xác nhận ngay khi thanh toán hoàn tất.
+  - Loại bỏ hoàn toàn 100% nhu cầu hoàn tiền khi điều dưỡng từ chối nhận ca.
+  - Khách hàng không bao giờ bị trừ tiền trước khi biết chắc điều dưỡng sẽ nhận ca.
+  - Máy trạng thái `BookingStateMachine` trở nên cực kỳ gọn gàng, logic đơn hướng tự nhiên.
 
 ---
 

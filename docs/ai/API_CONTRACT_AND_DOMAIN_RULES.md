@@ -28,14 +28,13 @@ Trạng thái Lịch hẹn trong mã nguồn `CareLinkAPI.Common.Enums.BookingSt
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PendingPayment: Khách hàng tạo lịch hẹn
-    PendingPayment --> PendingAcceptance: Thanh toán cọc / ca thành công
-    PendingPayment --> Canceled: Hết hạn giữ chỗ (15-30p) hoặc Khách hủy
-    PendingPayment --> Accepted: Luồng Đề xuất Chat (Caregiver đã đồng ý trước)
-    PendingAcceptance --> Accepted: Điều dưỡng bấm Chấp nhận ca
-    PendingAcceptance --> Canceled: Điều dưỡng từ chối / Khách hàng hủy
+    [*] --> PendingAcceptance: Khách hàng tạo lịch hẹn trực tiếp
+    PendingAcceptance --> PendingPayment: Điều dưỡng bấm Chấp nhận ca (giữ slot 30p)
+    PendingAcceptance --> Canceled: Điều dưỡng từ chối / Khách hủy (0đ refund, không giam tiền)
+    PendingPayment --> Accepted: Khách hàng thanh toán PayOS thành công (Kích hoạt ca)
+    PendingPayment --> Canceled: Hết hạn thanh toán 30p hoặc Khách hủy (0đ refund)
     Accepted --> InProgress: Điều dưỡng check-in bắt đầu ca trực
-    Accepted --> Canceled: Hủy khẩn cấp trước giờ trực
+    Accepted --> Canceled: Hủy khẩn cấp trước giờ trực (hoàn tiền theo chính sách)
     InProgress --> Completed: Điều dưỡng hoàn tất sau khi nộp bệnh án
     Completed --> Disputed: Khách hàng khiếu nại dịch vụ
     Completed --> [*]: Quyết toán ví & Đánh giá 2 chiều
@@ -43,14 +42,15 @@ stateDiagram-v2
     Disputed --> [*]
 ```
 
-- **Quy tắc chuyển đổi trạng thái đặc thù:**
-  - **Luồng thông thường:** `PendingPayment` -> Khách trả tiền -> `PendingAcceptance` -> Điều dưỡng bấm Nhận ca -> `Accepted` -> `InProgress` -> `Completed`.
+- **Quy tắc chuyển đổi trạng thái hợp nhất (Unified Workflow):**
+  - **Luồng đặt trực tiếp (Direct Booking):** Khách tạo đơn -> Trạng thái ban đầu là `PendingAcceptance` -> Điều dưỡng kiểm tra & bấm Nhận (`PUT /accept`) -> Chuyển sang `PendingPayment` (giữ slot 30 phút) -> Khách thanh toán PayOS -> `Accepted` -> `InProgress` -> `Completed`.
+    - *Lợi thế đột phá:* Nếu điều dưỡng từ chối (`PUT /reject`), đơn hủy ngay lập tức mà **không cần hoàn tiền** vì khách chưa hề bị trừ tiền trước.
   - **Luồng đàm phán trong Chat (`BookingProposal`):** 
     1. Family tạo đề xuất: `POST /api/v1/conversations/{id}/proposals`.
-    2. Caregiver chấp thuận: `PUT /api/v1/conversations/{conversationId}/proposals/{proposalId}/accept`.
+    2. Caregiver deal giá (`counter`) hoặc chấp thuận: `PUT /api/v1/conversations/{conversationId}/proposals/{proposalId}/accept`.
     3. Hệ thống tự động tạo Booking ở trạng thái `PendingPayment` và **giữ chỗ trong 30 phút**.
-    4. Khi Family thanh toán PayOS thành công, ca trực được phép chuyển thẳng từ `PendingPayment` -> `Accepted` (hàm `EnsureCanTransitionProposal`).
-  - **Hủy ca (`Canceled`):** Bắt buộc người hủy phải gửi lý do (`CancellationReason`).
+    4. Khi Family thanh toán PayOS thành công, ca trực chuyển sang `Accepted`.
+  - **Hủy ca (`Canceled`):** Bắt buộc người hủy phải gửi lý do (`CancellationReason`). Nếu hủy trước `Accepted`, không cần hoàn tiền. Nếu hủy sau `Accepted`, tính toán hoàn tiền theo chính sách thời gian.
 
 ---
 
@@ -84,11 +84,11 @@ stateDiagram-v2
 ### 3. Nhóm Bookings (8 Endpoints)
 | HTTP Method | Route | Tóm tắt chức năng | Request DTO / Params | Response DTO | Authorization |
 | :--- | :--- | :--- | :--- | :--- | :---: |
-| `POST` | `/api/v1/bookings` | Tạo ca chăm sóc (status `PendingPayment`) | `CreateBookingRequest` | `BookingResponse` | Customer |
+| `POST` | `/api/v1/bookings` | Tạo ca chăm sóc (status ban đầu: `PendingAcceptance`) | `CreateBookingRequest` | `BookingResponse` | Customer |
 | `GET` | `/api/v1/bookings` | Danh sách ca chăm sóc (Customer: của mình, Nurse: được phân, Admin: tất cả) | Query phân trang, status | `PagedResultOfBookingResponse` | Authorize |
 | `GET` | `/api/v1/bookings/{id}` | Xem chi tiết ca chăm sóc theo ID | Route `{id}` | `BookingResponse` | Authorize |
-| `PUT` | `/api/v1/bookings/{id}/accept` | Điều dưỡng chấp nhận ca (`PendingAcceptance` -> `Accepted`) | Route `{id}` | `BookingResponse` | Nurse |
-| `PUT` | `/api/v1/bookings/{id}/reject` | Điều dưỡng từ chối ca; giải phóng slot và thông báo khách | Route `{id}`, `RejectBookingRequest` | `BookingResponse` | Nurse |
+| `PUT` | `/api/v1/bookings/{id}/accept` | Điều dưỡng chấp nhận ca (`PendingAcceptance` -> `PendingPayment`, giữ slot 30p) | Route `{id}` | `BookingResponse` | Nurse |
+| `PUT` | `/api/v1/bookings/{id}/reject` | Điều dưỡng từ chối ca (`PendingAcceptance` -> `Canceled`, 0đ refund) | Route `{id}`, `RejectBookingRequest` | `BookingResponse` | Nurse |
 | `PUT` | `/api/v1/bookings/{id}/start` | Điều dưỡng check-in bắt đầu ca (`Accepted` -> `InProgress`) | Route `{id}` | `BookingResponse` | Nurse |
 | `PUT` | `/api/v1/bookings/{id}/finish` | Điều dưỡng hoàn tất ca sau khi nộp bệnh án (`InProgress` -> `Completed`) | Route `{id}` | `BookingResponse` | Nurse |
 | `PUT` | `/api/v1/bookings/{id}/cancel` | Khách hoặc điều dưỡng hủy ca; hoàn tiền theo chính sách | Route `{id}`, `CancelBookingRequest` | `BookingResponse` | Authorize |

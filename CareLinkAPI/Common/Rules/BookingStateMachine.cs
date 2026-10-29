@@ -6,13 +6,9 @@ namespace CareLinkAPI.Common.Rules;
 /// <summary>
 /// Book-02: single source of truth for allowed booking status transitions.
 /// <code>
-/// PendingPayment -> PendingAcceptance -> Accepted -> InProgress -> Completed -> Disputed
-///       |                  |                |
-///       |                  +----------------+--> Canceled
-///       |                                   ^
-///       +--(proposal flow: nurse pre-agreed)+
-///       |
-///       +--(unpaid hold expired)-----------> Canceled
+/// PendingAcceptance -> PendingPayment -> Accepted -> InProgress -> Completed -> Disputed
+///         |                   |              |
+///         +-------------------+--------------+--> Canceled
 /// </code>
 /// </summary>
 public static class BookingStateMachine
@@ -20,8 +16,8 @@ public static class BookingStateMachine
     private static readonly IReadOnlyDictionary<BookingStatus, BookingStatus[]> StandardTransitions =
         new Dictionary<BookingStatus, BookingStatus[]>
         {
-            [BookingStatus.PendingPayment] = [BookingStatus.PendingAcceptance, BookingStatus.Canceled],
-            [BookingStatus.PendingAcceptance] = [BookingStatus.Accepted, BookingStatus.Canceled],
+            [BookingStatus.PendingAcceptance] = [BookingStatus.PendingPayment, BookingStatus.Canceled],
+            [BookingStatus.PendingPayment] = [BookingStatus.Accepted, BookingStatus.Canceled],
             [BookingStatus.Accepted] = [BookingStatus.InProgress, BookingStatus.Canceled],
             [BookingStatus.InProgress] = [BookingStatus.Completed],
             [BookingStatus.Completed] = [BookingStatus.Disputed],
@@ -43,8 +39,8 @@ public static class BookingStateMachine
 
     public static string FormatStatusVi(BookingStatus status) => status switch
     {
-        BookingStatus.PendingPayment => "Chờ thanh toán",
         BookingStatus.PendingAcceptance => "Chờ điều dưỡng nhận",
+        BookingStatus.PendingPayment => "Chờ thanh toán",
         BookingStatus.Accepted => "Đã tiếp nhận",
         BookingStatus.InProgress => "Đang thực hiện",
         BookingStatus.Completed => "Đã hoàn thành",
@@ -54,16 +50,11 @@ public static class BookingStateMachine
     };
 
     /// <summary>
-    /// Specialized transition check for the negotiated chat proposal flow where the caregiver has already
-    /// accepted the proposal before payment was made. Only valid when transitioning PendingPayment -> Accepted.
+    /// Guard check for chat proposals or payment transitions. In the unified workflow,
+    /// PendingPayment -> Accepted is standard. Kept for backward compatibility.
     /// </summary>
     public static void EnsureCanTransitionProposal(BookingStatus from, BookingStatus to)
     {
-        if (from == BookingStatus.PendingPayment && to == BookingStatus.Accepted)
-        {
-            return;
-        }
-
         EnsureCanTransition(from, to);
     }
 

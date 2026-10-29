@@ -294,7 +294,7 @@ public class NurseSearchService(
                         && b.ScheduledStart < endOfDayUtc
                         && b.ScheduledEnd > startOfDayUtc
                         && b.Status != (int)BookingStatus.Canceled
-                        && (b.Status != (int)BookingStatus.PendingPayment || b.CreatedAt >= pendingCutoff))
+                        && (b.Status != (int)BookingStatus.PendingPayment || (b.NurseConfirmedAt ?? b.CreatedAt) >= pendingCutoff))
             .ToListAsync(cancellationToken);
 
         var nowUtc = DateTime.UtcNow;

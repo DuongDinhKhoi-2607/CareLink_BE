@@ -210,4 +210,92 @@ public class BookingFlowV2Tests
         Assert.Equal("17:15", response.RequestedArrivalTime);
         Assert.Contains("[Giờ yêu cầu có mặt: 17:15]", response.CustomerNotes);
     }
+
+    [Fact]
+    public void NewWorkflow_DirectBooking_LifecycleFollowsNewOrder()
+    {
+        // 1. Khách tạo ca: Trạng thái ban đầu là PendingAcceptance (chờ điều dưỡng nhận, chưa thanh toán)
+        var booking = new Booking
+        {
+            Id = Guid.NewGuid(),
+            Status = (int)BookingStatus.PendingAcceptance,
+            ScheduledStart = DateTime.UtcNow.AddDays(2),
+            ScheduledEnd = DateTime.UtcNow.AddDays(2).AddHours(2),
+            TotalPrice = 300_000m,
+            CreatedAt = DateTime.UtcNow
+        };
+        Assert.Equal((int)BookingStatus.PendingAcceptance, booking.Status);
+
+        // 2. Điều dưỡng bấm nhận ca: Chuyển sang PendingPayment (khóa giữ chỗ 30p chờ gia đình trả tiền)
+        BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.PendingPayment);
+        booking.Status = (int)BookingStatus.PendingPayment;
+        booking.NurseConfirmedAt = DateTime.UtcNow;
+        Assert.Equal((int)BookingStatus.PendingPayment, booking.Status);
+        Assert.NotNull(booking.NurseConfirmedAt);
+
+        // 3. Khách hàng thanh toán qua PayOS: Chuyển thẳng sang Accepted
+        BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Accepted);
+        booking.Status = (int)BookingStatus.Accepted;
+        booking.AcceptedAt = DateTime.UtcNow;
+        Assert.Equal((int)BookingStatus.Accepted, booking.Status);
+        Assert.NotNull(booking.AcceptedAt);
+
+        // 4. Đến giờ ca: Điều dưỡng check-in bắt đầu ca
+        BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.InProgress);
+        booking.Status = (int)BookingStatus.InProgress;
+        Assert.Equal((int)BookingStatus.InProgress, booking.Status);
+    }
+
+    [Fact]
+    public void NewWorkflow_NurseRejectsPendingAcceptance_ZeroRefundNeeded()
+    {
+        var booking = new Booking
+        {
+            Id = Guid.NewGuid(),
+            Status = (int)BookingStatus.PendingAcceptance,
+            ScheduledStart = DateTime.UtcNow.AddDays(1),
+            ScheduledEnd = DateTime.UtcNow.AddDays(1).AddHours(2),
+            TotalPrice = 250_000m,
+            Payment = null // Chưa hề thanh toán
+        };
+
+        // Khi điều dưỡng từ chối ở bước này:
+        var refundPercent = BookingCancellationPolicy.GetRefundPercent(
+            (BookingStatus)booking.Status,
+            CanceledBy.Nurse,
+            booking.ScheduledStart,
+            DateTime.UtcNow);
+
+        BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Canceled);
+        booking.Status = (int)BookingStatus.Canceled;
+
+        // Số tiền hoàn trả là 0đ vì khách chưa hề bị trừ tiền
+        Assert.Equal(0m, refundPercent);
+        Assert.Equal((int)BookingStatus.Canceled, booking.Status);
+    }
+
+    [Fact]
+    public void NewWorkflow_CustomerCancelsWhilePendingPayment_ZeroRefundNeeded()
+    {
+        var booking = new Booking
+        {
+            Id = Guid.NewGuid(),
+            Status = (int)BookingStatus.PendingPayment,
+            ScheduledStart = DateTime.UtcNow.AddDays(1),
+            ScheduledEnd = DateTime.UtcNow.AddDays(1).AddHours(2),
+            TotalPrice = 200_000m
+        };
+
+        var refundPercent = BookingCancellationPolicy.GetRefundPercent(
+            (BookingStatus)booking.Status,
+            CanceledBy.Customer,
+            booking.ScheduledStart,
+            DateTime.UtcNow);
+
+        BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Canceled);
+        booking.Status = (int)BookingStatus.Canceled;
+
+        Assert.Equal(0m, refundPercent);
+        Assert.Equal((int)BookingStatus.Canceled, booking.Status);
+    }
 }

@@ -25,15 +25,19 @@ public static class BookingCancellationPolicy
         DateTime scheduledStartUtc,
         DateTime nowUtc)
     {
+        // Prior to Accepted, customer has not paid, so refund is 0%
+        if (currentStatus is BookingStatus.PendingAcceptance or BookingStatus.PendingPayment)
+        {
+            return 0m;
+        }
+
         if (canceledBy is CanceledBy.Nurse or CanceledBy.System)
         {
-            return currentStatus == BookingStatus.PendingPayment ? 0m : 100m;
+            return 100m;
         }
 
         return currentStatus switch
         {
-            BookingStatus.PendingPayment => 0m,
-            BookingStatus.PendingAcceptance => 100m,
             BookingStatus.Accepted => GetCustomerRefundPercentForAccepted(scheduledStartUtc - nowUtc),
             _ => 0m
         };

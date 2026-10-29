@@ -9,15 +9,17 @@ namespace CareLinkAPI.Tests;
 public class BookingWorkflowTests
 {
     [Theory]
-    [InlineData(BookingStatus.PendingPayment, BookingStatus.PendingAcceptance, true)]
-    [InlineData(BookingStatus.PendingPayment, BookingStatus.Canceled, true)]
-    [InlineData(BookingStatus.PendingAcceptance, BookingStatus.Accepted, true)]
+    [InlineData(BookingStatus.PendingAcceptance, BookingStatus.PendingPayment, true)]
     [InlineData(BookingStatus.PendingAcceptance, BookingStatus.Canceled, true)]
+    [InlineData(BookingStatus.PendingPayment, BookingStatus.Accepted, true)]
+    [InlineData(BookingStatus.PendingPayment, BookingStatus.Canceled, true)]
     [InlineData(BookingStatus.Accepted, BookingStatus.InProgress, true)]
     [InlineData(BookingStatus.Accepted, BookingStatus.Canceled, true)]
     [InlineData(BookingStatus.InProgress, BookingStatus.Completed, true)]
     [InlineData(BookingStatus.Completed, BookingStatus.Disputed, true)]
     [InlineData(BookingStatus.Disputed, BookingStatus.Completed, true)]
+    [InlineData(BookingStatus.PendingPayment, BookingStatus.PendingAcceptance, false)]
+    [InlineData(BookingStatus.PendingAcceptance, BookingStatus.Accepted, false)]
     [InlineData(BookingStatus.Completed, BookingStatus.InProgress, false)]
     [InlineData(BookingStatus.Canceled, BookingStatus.Accepted, false)]
     [InlineData(BookingStatus.InProgress, BookingStatus.Canceled, false)]
@@ -41,12 +43,11 @@ public class BookingWorkflowTests
     }
 
     [Fact]
-    public void ProposalTransition_PendingPaymentToAccepted_IsAllowed()
+    public void PaymentTransition_PendingPaymentToAccepted_IsAllowed()
     {
-        // Standard transition forbids PendingPayment -> Accepted
-        Assert.False(BookingStateMachine.CanTransition(BookingStatus.PendingPayment, BookingStatus.Accepted));
+        // In the unified workflow, PendingPayment -> Accepted is standard and allowed
+        Assert.True(BookingStateMachine.CanTransition(BookingStatus.PendingPayment, BookingStatus.Accepted));
 
-        // But specialized EnsureCanTransitionProposal allows it per ADR-003
         var exception = Record.Exception(() =>
             BookingStateMachine.EnsureCanTransitionProposal(BookingStatus.PendingPayment, BookingStatus.Accepted));
 

@@ -58,13 +58,14 @@ public class PaymentService(
         if (booking.Status != (int)BookingStatus.PendingPayment)
         {
             throw new ConflictException(
-                $"Only bookings awaiting payment can be paid (current status: '{(BookingStatus)booking.Status}').");
+                $"Chỉ có thể thanh toán cho ca chăm sóc đang ở trạng thái chờ thanh toán (trạng thái hiện tại: '{BookingStateMachine.FormatStatusVi((BookingStatus)booking.Status)}').");
         }
 
-        var holdUntil = booking.CreatedAt.AddMinutes(_booking.PendingPaymentHoldMinutes);
+        var holdStart = booking.NurseConfirmedAt ?? booking.CreatedAt;
+        var holdUntil = holdStart.AddMinutes(_booking.PendingPaymentHoldMinutes);
         if (DateTime.UtcNow >= holdUntil)
         {
-            throw new BusinessRuleException("The payment window for this booking has expired. Please create a new booking.");
+            throw new BusinessRuleException("Thời hạn thanh toán cho ca chăm sóc này đã hết. Vui lòng tạo yêu cầu mới.");
         }
 
         var payment = booking.Payment;
@@ -397,14 +398,14 @@ public class PaymentService(
                 ? $" Tiền công còn lại {Money(remainingToNurse)} do khách thanh toán trực tiếp cho bạn khi hoàn thành ca."
                 : string.Empty;
 
+            // In the unified workflow, nurse has already agreed (either via chat proposal or direct booking acceptance).
+            // Once paid, booking transitions directly from PendingPayment -> Accepted.
+            BookingStateMachine.EnsureCanTransition(BookingStatus.PendingPayment, BookingStatus.Accepted);
+            booking.Status = (int)BookingStatus.Accepted;
+            booking.AcceptedAt = now;
+
             if (isProposalBooking)
             {
-                // Caregiver already accepted this proposal in advance.
-                // Transition directly from PendingPayment -> Accepted using guarded proposal transition.
-                BookingStateMachine.EnsureCanTransitionProposal(BookingStatus.PendingPayment, BookingStatus.Accepted);
-                booking.Status = (int)BookingStatus.Accepted;
-                booking.AcceptedAt = now;
-
                 // Update proposal to BookedAndPaid
                 proposal!.Status = (int)ProposalStatus.BookedAndPaid;
                 proposal.UpdatedAt = now;
@@ -454,23 +455,19 @@ public class PaymentService(
                         booking.Id, booking.ConversationId);
                 }
 
-                // Direct booking flow (requires caregiver acceptance after payment)
-                BookingStateMachine.EnsureCanTransition(BookingStatus.PendingPayment, BookingStatus.PendingAcceptance);
-                booking.Status = (int)BookingStatus.PendingAcceptance;
-
                 await NotifyAsync(
                     booking.Customer.UserId,
-                    "Thanh toán thành công",
-                    $"Bạn đã thanh toán thành công {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Đang chờ điều dưỡng xác nhận.{remainingCustomerNote}",
+                    "Thanh toán thành công - Lịch hẹn đã xác nhận",
+                    $"Bạn đã thanh toán thành công {Money(payment.Amount)} cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Ca chăm sóc đã được xác nhận.{remainingCustomerNote}",
                     NotificationTypes.PaymentSucceeded,
                     booking.Id,
                     cancellationToken);
 
                 await NotifyAsync(
                     booking.Nurse.UserId,
-                    "Bạn có lịch hẹn mới",
-                    $"Có yêu cầu chăm sóc mới lúc {FormatTime(booking.ScheduledStart)}. Khách hàng đã thanh toán {Money(payment.Amount)} qua PayOS. Vui lòng phản hồi trong {_booking.NurseAcceptTimeoutMinutes} phút.{remainingNurseNote}",
-                    NotificationTypes.BookingNewRequest,
+                    "Ca chăm sóc đã được xác nhận",
+                    $"Khách hàng đã thanh toán {Money(payment.Amount)} qua PayOS cho lịch hẹn lúc {FormatTime(booking.ScheduledStart)}. Ca chăm sóc đã được kích hoạt.{remainingNurseNote}",
+                    NotificationTypes.BookingAccepted,
                     booking.Id,
                     cancellationToken);
             }
