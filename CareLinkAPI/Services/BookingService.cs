@@ -278,9 +278,12 @@ public class BookingService(
             if (!string.IsNullOrWhiteSpace(request.RequestedArrivalTime))
             {
                 var arrivalTag = $"[Giờ yêu cầu có mặt: {request.RequestedArrivalTime.Trim()}]";
-                combinedNotes = string.IsNullOrWhiteSpace(combinedNotes)
-                    ? arrivalTag
-                    : $"{arrivalTag} {combinedNotes}";
+                if (combinedNotes == null || !combinedNotes.StartsWith("[Giờ yêu cầu có mặt:", StringComparison.OrdinalIgnoreCase))
+                {
+                    combinedNotes = string.IsNullOrWhiteSpace(combinedNotes)
+                        ? arrivalTag
+                        : $"{arrivalTag} {combinedNotes}";
+                }
             }
 
             var booking = new Booking
@@ -675,6 +678,13 @@ public class BookingService(
             var refund = ApplyCancellation(booking, canceledBy, reason, now);
             var who = canceledBy == CanceledBy.Customer ? "Khách hàng" : "Điều dưỡng";
 
+            // Bồi thường cho Điều dưỡng nếu khách hàng hủy sát ca (< 12 giờ) và ca đã được thanh toán
+            if (canceledBy == CanceledBy.Customer && refund > 0 && refund < booking.TotalPrice)
+            {
+                var nurseCompensation = booking.TotalPrice - refund;
+                await walletService.SettleBookingEarningAsync(booking.NurseId, booking.Id, nurseCompensation, 0m, cancellationToken);
+            }
+
             // Đồng bộ proposal liên kết sang Expired để giao diện Chat reset sạch thông tin
             var proposal = await conversations.GetProposalByBookingIdAsync(booking.Id, asNoTracking: false, cancellationToken);
             if (proposal != null && proposal.Status != (int)ProposalStatus.Expired)
@@ -704,7 +714,7 @@ public class BookingService(
             }
 
             var recipientUserId = canceledBy == CanceledBy.Customer ? booking.Nurse.UserId : booking.Customer.UserId;
-            var refundText = canceledBy == CanceledBy.Nurse ? RefundSentence(refund) : string.Empty;
+            var refundText = refund > 0 ? RefundSentence(refund) : string.Empty;
 
             await NotifyAsync(
                 recipientUserId,
@@ -713,6 +723,17 @@ public class BookingService(
                 NotificationTypes.BookingCanceled,
                 booking.Id,
                 cancellationToken);
+
+            if (canceledBy == CanceledBy.Customer && refund > 0)
+            {
+                await NotifyAsync(
+                    booking.Customer.UserId,
+                    "Hoàn tiền ca chăm sóc đã hủy",
+                    $"Bạn đã hủy ca hẹn lúc {FormatTime(booking.ScheduledStart)}.{RefundSentence(refund)} Số tiền đã được hoàn vào Ví tiền CareLink của bạn.",
+                    NotificationTypes.WalletCredited,
+                    booking.Id,
+                    cancellationToken);
+            }
         }, cancellationToken);
 
     // ───────────────────────── Book-07: auto reject ─────────────────────────
@@ -952,15 +973,43 @@ public class BookingService(
         booking.CanceledBy = (int)canceledBy;
         booking.CanceledAt = now;
 
+        decimal refundAmount = 0m;
         if (booking.Payment is { } payment)
         {
             if (payment.Status == (int)PaymentStatus.Pending)
             {
                 payment.Status = (int)PaymentStatus.Failed;
             }
+            else if (payment.Status == (int)PaymentStatus.Paid)
+            {
+                // ── Tính toán hoàn tiền theo chính sách hủy ca (ADR-002) ──
+                if (canceledBy == CanceledBy.Nurse || canceledBy == CanceledBy.System)
+                {
+                    // Điều dưỡng hoặc Hệ thống hủy: Hoàn 100% toàn bộ (Giá dịch vụ + Phí sàn 60k)
+                    refundAmount = booking.TotalPrice + booking.PlatformFee;
+                }
+                else if (canceledBy == CanceledBy.Customer)
+                {
+                    var hoursUntilStart = (booking.ScheduledStart - now).TotalHours;
+                    if (hoursUntilStart >= 12)
+                    {
+                        // Hủy trước 12 tiếng: Hoàn 100% tiền dịch vụ (giữ lại 60k phí sàn)
+                        refundAmount = booking.TotalPrice;
+                    }
+                    else
+                    {
+                        // Hủy sát giờ (< 12 tiếng): Khấu trừ 50% bồi thường điều dưỡng, hoàn 50% còn lại cho khách
+                        refundAmount = Math.Round(booking.TotalPrice * 0.5m, 0);
+                    }
+                }
+
+                payment.RefundedAmount = refundAmount;
+                payment.RefundedAt = now;
+                payment.Status = (int)PaymentStatus.Refunded;
+            }
         }
 
-        return 0m;
+        return refundAmount;
     }
 
     private Task NotifyAsync(
