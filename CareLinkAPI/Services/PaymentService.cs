@@ -77,22 +77,13 @@ public class PaymentService(
         var resolvedReturnUrl = baseReturnUrl.Contains('?') ? $"{baseReturnUrl}&bookingId={booking.Id}" : $"{baseReturnUrl}?bookingId={booking.Id}";
         var resolvedCancelUrl = baseCancelUrl.Contains('?') ? $"{baseCancelUrl}&bookingId={booking.Id}" : $"{baseCancelUrl}?bookingId={booking.Id}";
 
-        // Determine charge amount: prioritize amount requested by FE
-        var platformFee = _payOs.PlatformFeePerBooking > 0 ? _payOs.PlatformFeePerBooking : 60_000m;
-        decimal chargeAmount;
-        if (customAmount.HasValue && customAmount.Value > 0)
-        {
-            chargeAmount = customAmount.Value;
-        }
-        else if (booking.TotalPrice > 0)
-        {
-            // Giá dịch vụ + Phí sàn hệ thống CareLink (ADR-002)
-            chargeAmount = booking.TotalPrice + platformFee;
-        }
-        else
-        {
-            chargeAmount = platformFee;
-        }
+        // Xác định số tiền thanh toán có thẩm quyền (Bất biến tài chính ADR-002 & AGENTS.md):
+        // Backend tự quyết định số tiền = Giá dịch vụ + Phí nền tảng CareLink 60.000 VNĐ.
+        // Tuyệt đối không cho phép client gửi số tiền tùy ý làm sai lệch doanh thu.
+        var platformFee = booking.PlatformFee > 0 ? booking.PlatformFee : (_payOs.PlatformFeePerBooking > 0 ? _payOs.PlatformFeePerBooking : 60_000m);
+        decimal chargeAmount = booking.TotalPrice > 0
+            ? booking.TotalPrice + platformFee
+            : platformFee;
 
         if (chargeAmount < 1000m)
         {
