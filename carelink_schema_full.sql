@@ -88,6 +88,7 @@ CREATE TABLE public.care_recipients (
     latitude        NUMERIC(10, 7),
     longitude       NUMERIC(10, 7),
     is_deleted      BOOLEAN     NOT NULL DEFAULT false, -- Soft delete
+    is_medical_record_shared BOOLEAN NOT NULL DEFAULT true, -- Quyền chia sẻ hồ sơ y tế
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT care_recipients_pkey         PRIMARY KEY (id),
     CONSTRAINT fk_recipient_customer        FOREIGN KEY (customer_id) REFERENCES public.customers(id) ON DELETE CASCADE
@@ -122,6 +123,11 @@ CREATE TABLE public.nurses (
                         CHECK (status IN (0, 1, 2, 3)),
                         -- 0=PendingVerification | 1=Active | 2=Suspended | 3=Rejected
     is_accepting_bookings BOOLEAN   NOT NULL DEFAULT true, -- Online/Offline switch
+    practitioner_type   INTEGER     NOT NULL DEFAULT 1,    -- 1=Chuyên nghiệp | 2=Sinh viên y khoa
+    student_email       VARCHAR,
+    is_student_email_verified BOOLEAN NOT NULL DEFAULT false,
+    student_email_otp_hash VARCHAR,
+    student_email_otp_expiry TIMESTAMPTZ,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT nurses_pkey          PRIMARY KEY (id),
@@ -199,6 +205,22 @@ CREATE TABLE public.services (
     CONSTRAINT services_pkey    PRIMARY KEY (id)
 );
 
+-- Module 9b: Bảng giá dịch vụ tùy chỉnh theo điều dưỡng (Nurse Service Pricings)
+CREATE TABLE public.nurse_service_pricings (
+    id                      UUID        NOT NULL DEFAULT gen_random_uuid(),
+    nurse_id                UUID        NOT NULL,
+    service_id              UUID        NOT NULL,
+    custom_price            NUMERIC     NOT NULL CHECK (custom_price >= 0),
+    is_offered              BOOLEAN     NOT NULL DEFAULT true,
+    custom_duration_minutes INTEGER     NOT NULL DEFAULT 60,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    CONSTRAINT nurse_service_pricings_pkey          PRIMARY KEY (id),
+    CONSTRAINT nurse_service_pricings_nurse_id_fkey FOREIGN KEY (nurse_id) REFERENCES public.nurses(id) ON DELETE CASCADE,
+    CONSTRAINT nurse_service_pricings_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE CASCADE,
+    CONSTRAINT uq_nurse_service                     UNIQUE (nurse_id, service_id)
+);
+
 -- ============================================================
 -- MODULE 5: TWO-WAY CHAT & BOOKING PROPOSALS
 -- ============================================================
@@ -251,12 +273,38 @@ CREATE TABLE public.bookings (
     canceled_at     TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     conversation_id UUID,
+    check_in_latitude NUMERIC,
+    check_in_longitude NUMERIC,
+    check_in_note   VARCHAR,
+    nurse_confirmed_at TIMESTAMPTZ,
+    customer_confirmed_at TIMESTAMPTZ,
+    base_services_price NUMERIC NOT NULL DEFAULT 0,
+    extra_minutes   INTEGER NOT NULL DEFAULT 0,
+    extra_minutes_price NUMERIC NOT NULL DEFAULT 0,
+    platform_fee    NUMERIC NOT NULL DEFAULT 60000,
+    is_medical_record_shared BOOLEAN NOT NULL DEFAULT true,
+    actual_finished_at TIMESTAMPTZ,
+    customer_notes  TEXT,
     CONSTRAINT bookings_pkey            PRIMARY KEY (id),
     CONSTRAINT fk_booking_customer      FOREIGN KEY (customer_id) REFERENCES public.customers(id),
     CONSTRAINT fk_booking_nurse         FOREIGN KEY (nurse_id) REFERENCES public.nurses(id),
     CONSTRAINT fk_booking_recipient     FOREIGN KEY (recipient_id) REFERENCES public.care_recipients(id),
     CONSTRAINT fk_booking_service       FOREIGN KEY (service_id) REFERENCES public.services(id),
     CONSTRAINT fk_booking_conversation  FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE SET NULL
+);
+
+-- Module 6b: Chi tiết các dịch vụ trong một ca chăm sóc (Booking Services)
+CREATE TABLE public.booking_services (
+    id              UUID        NOT NULL DEFAULT gen_random_uuid(),
+    booking_id      UUID        NOT NULL,
+    service_id      UUID        NOT NULL,
+    price           NUMERIC     NOT NULL DEFAULT 0,
+    duration_minutes INTEGER    NOT NULL DEFAULT 0,
+    quantity        INTEGER     NOT NULL DEFAULT 1,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    CONSTRAINT booking_services_pkey        PRIMARY KEY (id),
+    CONSTRAINT booking_services_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE CASCADE,
+    CONSTRAINT booking_services_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE CASCADE
 );
 
 -- 2. Lịch sử các phiên bản đề xuất ca làm trong hội thoại (Negotiation Proposals)
@@ -276,10 +324,12 @@ CREATE TABLE public.booking_proposals (
     scheduled_end       TIMESTAMPTZ NOT NULL,
     total_price         NUMERIC     NOT NULL CHECK (total_price >= 0),
     notes               TEXT,
-    status              INTEGER     NOT NULL DEFAULT 1 CHECK (status IN (1, 2, 3, 4, 5, 6)),
+    status              INTEGER     NOT NULL DEFAULT 1 CHECK (status IN (1, 2, 3, 4, 5, 6, 7)),
     response_note       TEXT,
     responded_at        TIMESTAMPTZ,
     booking_id          UUID,
+    counter_price       NUMERIC(12, 2),
+    counter_note        TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT booking_proposals_pkey       PRIMARY KEY (id),
@@ -297,6 +347,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_proposals_booking_id
 ON public.booking_proposals(booking_id) 
 WHERE booking_id IS NOT NULL;
 
+-- Module 5b: Danh sách các dịch vụ trong đề xuất thương lượng (Proposal Services)
+CREATE TABLE public.booking_proposal_services (
+    id                  UUID        NOT NULL DEFAULT gen_random_uuid(),
+    proposal_id         UUID        NOT NULL,
+    service_id          UUID        NOT NULL,
+    price               NUMERIC     NOT NULL DEFAULT 0,
+    duration_minutes    INTEGER     NOT NULL DEFAULT 0,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    CONSTRAINT booking_proposal_services_pkey           PRIMARY KEY (id),
+    CONSTRAINT booking_proposal_services_proposal_id_fkey FOREIGN KEY (proposal_id) REFERENCES public.booking_proposals(id) ON DELETE CASCADE,
+    CONSTRAINT booking_proposal_services_service_id_fkey  FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE CASCADE
+);
+
 -- 3. Bảng tin nhắn thời gian thực trong hội thoại (Chat Timeline)
 -- Loại type: 1=Text | 2=ProposalCard | 3=ProposalResponse | 4=SystemNotification
 CREATE TABLE public.messages (
@@ -307,6 +370,8 @@ CREATE TABLE public.messages (
     type                INTEGER     NOT NULL DEFAULT 1 CHECK (type IN (1, 2, 3, 4)),
     proposal_id         UUID,
     booking_id          UUID,
+    counter_price       NUMERIC(12, 2),
+    counter_note        TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT messages_pkey            PRIMARY KEY (id),
     CONSTRAINT fk_message_conversation  FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE,
@@ -400,6 +465,24 @@ CREATE TABLE public.payout_requests (
     CONSTRAINT fk_payout_nurse              FOREIGN KEY (nurse_id) REFERENCES public.nurses(id),
     CONSTRAINT fk_payout_wallet             FOREIGN KEY (wallet_id) REFERENCES public.wallets(id),
     CONSTRAINT fk_payout_resolver           FOREIGN KEY (resolved_by) REFERENCES public.users(id)
+);
+
+-- Pay-06: Yêu cầu hoàn tiền ca trực (Refund Requests)
+CREATE TABLE public.refund_requests (
+    id                  UUID        NOT NULL DEFAULT gen_random_uuid(),
+    booking_id          UUID        NOT NULL,
+    customer_id         UUID        NOT NULL,
+    amount              NUMERIC     NOT NULL,
+    bank_name           VARCHAR,
+    bank_account_number VARCHAR,
+    bank_account_name   VARCHAR,
+    status              INTEGER     NOT NULL DEFAULT 1, -- 1=Pending | 2=Approved | 3=Rejected
+    admin_note          TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_at         TIMESTAMPTZ,
+    CONSTRAINT refund_requests_pkey             PRIMARY KEY (id),
+    CONSTRAINT refund_requests_booking_id_fkey  FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE CASCADE,
+    CONSTRAINT refund_requests_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -526,6 +609,17 @@ CREATE TABLE public.handbook_articles (
     CONSTRAINT handbook_articles_pkey PRIMARY KEY (id),
     CONSTRAINT handbook_articles_slug_unique UNIQUE (slug),
     CONSTRAINT fk_handbook_author FOREIGN KEY (author_id) REFERENCES public.users(id) ON DELETE SET NULL
+);
+
+-- Module 12: File Upload (Lưu trữ chứng chỉ & hình ảnh)
+CREATE TABLE public.uploaded_files (
+    id                  UUID        NOT NULL DEFAULT gen_random_uuid(),
+    file_name           TEXT        NOT NULL UNIQUE,
+    content_type        TEXT        NOT NULL,
+    data                BYTEA       NOT NULL,
+    size_bytes          BIGINT      NOT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uploaded_files_pkey  PRIMARY KEY (id)
 );
 
 -- ============================================================

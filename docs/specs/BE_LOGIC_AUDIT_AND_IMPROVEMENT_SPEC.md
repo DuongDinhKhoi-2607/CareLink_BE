@@ -259,6 +259,59 @@ CREATE INDEX IF NOT EXISTS idx_booking_services_booking_id ON public.booking_ser
 
 ---
 
+## 🔍 PHẦN IV: 4 ĐIỂM RÀ SOÁT & LỖ HỔNG MỚI BỔ SUNG QUA THỰC CHIẾN (31/10/2026)
+
+Qua đợt kiểm thử thực tế đa vai trò (Gia đình - Điều dưỡng - Quản trị viên), nhóm tiếp tục phát hiện và chuẩn hóa 4 vấn đề kỹ thuật sau:
+
+### 1. Lỗi CHECK Constraint tại `booking_proposals` chặn trạng thái `7` (`CounterOffered`)
+* **Vị trí:** CSDL Supabase PostgreSQL bảng `public.booking_proposals`.
+* **Hiện trạng:** Ràng buộc `status INTEGER NOT NULL DEFAULT 1 CHECK (status IN (1, 2, 3, 4, 5, 6))` chỉ hỗ trợ 6 trạng thái ban đầu.
+* **Hậu quả:** Khi Điều dưỡng gửi đề xuất giá mới (Counter-Offer theo BE-06), C# gán `ProposalStatus.CounterOffered = 7`. PostgreSQL ném ngoại lệ vi phạm ràng buộc CHECK constraint, Backend trả về 500 `An unexpected error occurred.`.
+* **Giải pháp khắc phục:**
+  ```sql
+  ALTER TABLE public.booking_proposals 
+      DROP CONSTRAINT IF EXISTS booking_proposals_status_check;
+  ALTER TABLE public.booking_proposals 
+      ADD CONSTRAINT booking_proposals_status_check 
+      CHECK (status IN (1, 2, 3, 4, 5, 6, 7));
+  ```
+
+### 2. Nới lỏng giới hạn `PageSize` trong `BookingQueryRequest` phục vụ Admin Portal
+* **Vị trí:** File [`CareLinkAPI/DTOs/Bookings/BookingRequests.cs`](../../CareLinkAPI/DTOs/Bookings/BookingRequests.cs#L92).
+* **Hiện trạng:** `[Range(1, 50)] public int PageSize { get; set; } = 10;`.
+* **Hậu quả:** Khi trang Admin (`AdminAppointments.jsx`) yêu cầu tải 50 - 100 bản ghi để thống kê toàn diện, nếu gửi `pageSize: 100`, ASP.NET Core Validation trả về `HTTP 400 Bad Request`, dẫn đến màn hình Admin hiển thị 0 ca.
+* **Giải pháp khắc phục:** Nâng dải kiểm định lên `[Range(1, 100)]` ở Backend DTO và chuẩn hóa Frontend truyền `PageSize: 50`.
+
+### 3. Tự động hóa xử lý hoàn tiền (`refund_requests`) khi ca đã thanh toán bị hủy
+* **Vị trí:** File [`CareLinkAPI/Services/BookingService.cs`](../../CareLinkAPI/Services/BookingService.cs#L736) (Hàm `ApplyCancellation`).
+* **Hiện trạng:** Bảng `public.refund_requests` đã có trong CSDL nhưng Backend chưa kích hoạt ghi nhận yêu cầu hoàn tiền khi hủy ca.
+* **Giải pháp chuẩn y tế:**
+  - Hủy ca do Điều dưỡng hoặc Hệ thống: Hoàn 100% chi phí (bao gồm cả phí nền tảng 60k).
+  - Khách hàng hủy trước 12 tiếng: Hoàn 100% tiền công dịch vụ (giữ lại 60k phí điều phối y tế).
+  - Khách hàng hủy sát giờ (< 12 tiếng): Khấu trừ 50% tiền công dịch vụ để bồi thường cho điều dưỡng, hoàn 50% còn lại vào Ví tiền gia đình.
+
+### 4. Phòng chống nhân đôi tiền tố giờ có mặt (`[Giờ yêu cầu có mặt: ...]`)
+* **Vị trí:** File [`CareLinkAPI/Services/BookingService.cs`](../../CareLinkAPI/Services/BookingService.cs#L278).
+* **Hiện trạng:** Khi cả FE và BE đều tự động gắn tiền tố vào `CustomerNotes`, chuỗi bị lặp 2 lần.
+* **Đã xử lý:** Thêm kiểm tra `!combinedNotes.StartsWith("[Giờ yêu cầu có mặt:", StringComparison.OrdinalIgnoreCase)` trước khi nối chuỗi.
+
+---
+
+## ✅ PHẦN V: BẢNG TRẠNG THÁI TRIỂN KHAI & NGHIỆM THU THỰC TẾ (31/10/2026)
+
+Toàn bộ các điểm rà soát cốt tử phía Backend đã được kiểm tra, vá triệt để và nghiệm thu thành công trong mã nguồn C# và CSDL:
+
+| Hạng mục cải tiến | Vị trí mã nguồn | Trạng thái kỹ thuật | Bằng chứng kiểm thử |
+| :--- | :--- | :---: | :--- |
+| **1. Vá lỗ hổng `customAmount`** | `CareLinkAPI/Services/PaymentService.cs` | ✅ **HOÀN TẤT** | Backend tự tính thẩm quyền `chargeAmount = booking.TotalPrice + platformFee`, cấm FE ghi đè tiền. |
+| **2. Tự động hoàn tiền & bồi thường 12h** | `CareLinkAPI/Services/BookingService.cs` | ✅ **HOÀN TẤT** | Triển khai trong `ApplyCancellation`: $\ge 12h$ hoàn 100% tiền công; $<12h$ bồi hoàn 50% điều dưỡng qua `WalletService` + 50% hoàn ví khách. |
+| **3. Mở rộng Constraint Proposal `status = 7`** | `carelink_schema_full.sql` | ✅ **HOÀN TẤT** | Cập nhật `CHECK (status IN (1, 2, 3, 4, 5, 6, 7))` hỗ trợ luồng Counter-Offer thỏa thuận giá. |
+| **4. Nới lỏng `PageSize` lên 100** | `CareLinkAPI/DTOs/Bookings/BookingRequests.cs` | ✅ **HOÀN TẤT** | `[Range(1, 100)]` giúp Admin Portal tải đầy đủ danh sách ca không bị `400 Bad Request`. |
+| **5. Chống trùng tiền tố giờ có mặt** | `CareLinkAPI/Services/BookingService.cs` | ✅ **HOÀN TẤT** | Kiểm tra tiền tố chống lặp `[Giờ yêu cầu có mặt: ...]`. |
+| **6. Đồng bộ toàn diện Supabase DDL** | `carelink_schema_full.sql` | ✅ **HOÀN TẤT** | Đồng bộ 100% khớp bảng Supabase: `booking_services`, `booking_proposal_services`, `nurse_service_pricings`, `refund_requests`, `uploaded_files`. |
+
+---
+
 ## 🤝 LỜI KẾT & PHỐI HỢP
 
 Tài liệu này được biên soạn trên tinh thần xây dựng và hỗ trợ tối đa giữa 2 nhóm. Nếu Quốc và Khôi thống nhất với các điểm bổ sung trên, hai bạn có thể bắt tay ngay vào Giai đoạn 1 (Chạy SQL Migration và cập nhật EF Core Models). Nhóm Frontend (Vy & Nguyên) cũng sẽ đồng thời cập nhật giao diện theo đúng ma trận hợp đồng này!
