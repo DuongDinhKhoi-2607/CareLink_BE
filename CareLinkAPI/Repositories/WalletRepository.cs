@@ -1,3 +1,4 @@
+using CareLinkAPI.Common.Enums;
 using CareLinkAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,48 @@ public class WalletRepository(CareLinkDbContext db) : IWalletRepository
         || await db.WalletTransactions.AnyAsync(
             t => t.WalletId == walletId && t.BookingId == bookingId && t.Type == type,
             cancellationToken);
+
+    public async Task<(decimal TotalSettled, decimal TotalDeducted)> GetBookingSettlementSummaryAsync(
+        Guid walletId,
+        Guid bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        var bookingEarningType = (int)WalletTransactionType.BookingEarning;
+        var refundDeductionType = (int)WalletTransactionType.RefundDeduction;
+
+        var dbRows = await db.WalletTransactions
+            .AsNoTracking()
+            .Where(t => t.WalletId == walletId
+                        && t.BookingId == bookingId
+                        && (t.Type == bookingEarningType || t.Type == refundDeductionType))
+            .Select(t => new { t.Id, t.Type, t.Amount })
+            .ToListAsync(cancellationToken);
+
+        var byId = dbRows.ToDictionary(x => x.Id, x => (x.Type, x.Amount));
+        foreach (var local in db.WalletTransactions.Local.Where(t =>
+                     t.WalletId == walletId
+                     && t.BookingId == bookingId
+                     && (t.Type == bookingEarningType || t.Type == refundDeductionType)))
+        {
+            byId[local.Id] = (local.Type, local.Amount);
+        }
+
+        decimal totalSettled = 0m;
+        decimal totalDeducted = 0m;
+        foreach (var (_, (txType, txAmount)) in byId)
+        {
+            if (txType == bookingEarningType && txAmount > 0m)
+            {
+                totalSettled += txAmount;
+            }
+            else if (txType == refundDeductionType)
+            {
+                totalDeducted += Math.Abs(txAmount);
+            }
+        }
+
+        return (totalSettled, totalDeducted);
+    }
 
     public async Task<(List<WalletTransaction> Items, int TotalCount)> GetTransactionsPagedAsync(
         Guid walletId,

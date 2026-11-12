@@ -148,6 +148,7 @@ public partial class CareLinkDbContext : DbContext
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
             entity.Property(e => e.AcceptedAt).HasColumnName("accepted_at");
+            entity.Property(e => e.PaymentHoldStartedAt).HasColumnName("payment_hold_started_at");
             entity.Property(e => e.AddressSnapshot)
                 .HasColumnType("character varying")
                 .HasColumnName("address_snapshot");
@@ -608,7 +609,7 @@ public partial class CareLinkDbContext : DbContext
                 .HasColumnName("payment_code");
             entity.Property(e => e.PaymentMethod).HasColumnName("payment_method");
             entity.Property(e => e.PlatformFee)
-                .HasDefaultValue(50000m)
+                .HasDefaultValue(60000m)
                 .HasColumnName("platform_fee");
             entity.Property(e => e.RefundedAmount)
                 .HasDefaultValue(0m)

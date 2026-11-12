@@ -46,6 +46,17 @@ public class DisputeRepository : IDisputeRepository
             .FirstOrDefaultAsync(d => d.BookingId == bookingId, ct);
     }
 
+    public async Task<bool> HasResolvedRefundDisputeForBookingAsync(Guid bookingId, Guid excludeDisputeId, CancellationToken ct = default)
+    {
+        return await _db.Disputes.AnyAsync(
+            d => d.BookingId == bookingId
+                 && d.Id != excludeDisputeId
+                 && d.Status == (int)DisputeStatus.Resolved
+                 && d.ResolutionType == 1
+                 && (d.RefundAmount ?? 0m) > 0m,
+            ct);
+    }
+
     public async Task<PagedResult<Dispute>> GetAllPagedAsync(int pageNumber, int pageSize, int? status, CancellationToken ct = default)
     {
         var query = _db.Disputes

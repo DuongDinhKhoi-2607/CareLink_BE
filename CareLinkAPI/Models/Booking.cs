@@ -42,6 +42,8 @@ public partial class Booking
 
     public DateTime? AcceptedAt { get; set; }
 
+    public DateTime? PaymentHoldStartedAt { get; set; }
+
     public DateTime? StartedAt { get; set; }
 
     public decimal? CheckInLatitude { get; set; }

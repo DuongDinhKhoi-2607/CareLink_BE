@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace CareLinkAPI.Models;
@@ -11,7 +11,7 @@ public partial class Payment
 
     public decimal Amount { get; set; }
 
-    public decimal PlatformFee { get; set; }
+    public decimal PlatformFee { get; set; } = 60_000m;
 
     public int PaymentMethod { get; set; }
 

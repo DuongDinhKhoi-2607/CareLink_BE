@@ -1,17 +1,22 @@
 using CareLinkAPI.Common.Enums;
+using CareLinkAPI.Common.Options;
 using CareLinkAPI.Contracts.Booking;
 using CareLinkAPI.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CareLinkAPI.Services;
 
 public class BookingQueryService : IBookingQueryService
 {
     private readonly CareLinkDbContext _db;
+    private readonly decimal _platformFeePerBooking;
 
-    public BookingQueryService(CareLinkDbContext db)
+    public BookingQueryService(CareLinkDbContext db, IOptions<PayOsOptions>? payOsOptions = null)
     {
         _db = db;
+        var configuredFee = payOsOptions?.Value.PlatformFeePerBooking ?? 0m;
+        _platformFeePerBooking = configuredFee > 0 ? configuredFee : 60_000m;
     }
 
     public async Task<BookingContextDto?> GetBookingContextAsync(Guid bookingId, CancellationToken ct = default)
@@ -65,8 +70,9 @@ public class BookingQueryService : IBookingQueryService
         var cancelled = bookings.Count(b => b.Status == (int)BookingStatus.Canceled);
 
         var totalGmv = bookings.Where(b => b.Status == (int)BookingStatus.Completed).Sum(b => b.TotalPrice);
-        const decimal platformFeePerBooking = 50000m;
-        var totalPlatformFee = completed * platformFeePerBooking;
+        var totalPlatformFee = bookings
+            .Where(b => b.Status == (int)BookingStatus.Completed)
+            .Sum(b => b.PlatformFee > 0 ? b.PlatformFee : _platformFeePerBooking);
 
         return new BookingMetricsDto(
             TotalBookings: total,

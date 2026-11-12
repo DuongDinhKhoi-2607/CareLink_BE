@@ -61,7 +61,7 @@ public class PaymentService(
                 $"Chỉ có thể thanh toán cho ca chăm sóc đang ở trạng thái chờ thanh toán (trạng thái hiện tại: '{BookingStateMachine.FormatStatusVi((BookingStatus)booking.Status)}').");
         }
 
-        var holdStart = booking.NurseConfirmedAt ?? booking.CreatedAt;
+        var holdStart = booking.PaymentHoldStartedAt ?? booking.CreatedAt;
         var holdUntil = holdStart.AddMinutes(_booking.PendingPaymentHoldMinutes);
         if (DateTime.UtcNow >= holdUntil)
         {

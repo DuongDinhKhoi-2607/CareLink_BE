@@ -55,6 +55,8 @@ public class BookingResponse
 
     public DateTime CreatedAt { get; init; }
     public DateTime? AcceptedAt { get; init; }
+    public DateTime? PaymentHoldStartedAt { get; init; }
+    public DateTime? PaymentHoldExpiresAt { get; init; }
     public DateTime? StartedAt { get; init; }
     public DateTime? NurseConfirmedAt { get; init; }
     public DateTime? CustomerConfirmedAt { get; init; }
@@ -114,11 +116,16 @@ public class BookingServiceItemDto
 public static class BookingMappings
 {
     /// <summary>Requires Customer, Nurse, Recipient, Service (and optionally Payment, Reviews, Disputes) to be loaded.</summary>
-    public static BookingResponse ToResponse(this Booking b)
+    public static BookingResponse ToResponse(this Booking b, int pendingPaymentHoldMinutes = 30)
     {
         var customerReview = b.Reviews?.FirstOrDefault(r => r.ReviewerRole == (int)UserRole.Customer);
         var nurseReview = b.Reviews?.FirstOrDefault(r => r.ReviewerRole == (int)UserRole.Nurse);
         var latestDispute = b.Disputes?.OrderByDescending(d => d.CreatedAt).FirstOrDefault();
+        var effectiveHoldStart = b.PaymentHoldStartedAt
+            ?? (b.Status == (int)BookingStatus.PendingPayment ? b.CreatedAt : (DateTime?)null);
+        var holdExpiresAt = b.Status == (int)BookingStatus.PendingPayment && effectiveHoldStart.HasValue
+            ? effectiveHoldStart.Value.AddMinutes(pendingPaymentHoldMinutes > 0 ? pendingPaymentHoldMinutes : 30)
+            : (DateTime?)null;
 
         string? requestedArrival = null;
         if (!string.IsNullOrWhiteSpace(b.CustomerNotes))
@@ -183,6 +190,8 @@ public static class BookingMappings
             CanceledBy = b.CanceledBy is null ? null : (CanceledBy)b.CanceledBy.Value,
             CreatedAt = b.CreatedAt,
             AcceptedAt = b.AcceptedAt,
+            PaymentHoldStartedAt = b.PaymentHoldStartedAt,
+            PaymentHoldExpiresAt = holdExpiresAt,
             StartedAt = b.StartedAt,
             NurseConfirmedAt = b.NurseConfirmedAt,
             CustomerConfirmedAt = b.CustomerConfirmedAt,

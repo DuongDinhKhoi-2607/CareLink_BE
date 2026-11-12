@@ -27,10 +27,12 @@ public class ChatService(
     IUnitOfWork unitOfWork,
     CareLinkDbContext dbContext,
     IOptions<BookingOptions> bookingOptions,
+    IOptions<PayOsOptions> payOsOptions,
     ILogger<ChatService> logger) : IChatService
 {
     private static readonly CultureInfo ViCulture = CultureInfo.GetCultureInfo("vi-VN");
     private readonly BookingOptions _bookingOptions = bookingOptions.Value;
+    private readonly PayOsOptions _payOsOptions = payOsOptions.Value;
 
     private sealed record Actor(Guid UserId, UserRole Role, Guid? CustomerId, Guid? NurseId);
 
@@ -528,6 +530,8 @@ public class ChatService(
                 throw new ConflictException("Bạn đã có ca chăm sóc khác trùng với khung giờ này.");
             }
 
+            var platformFee = _payOsOptions.PlatformFeePerBooking > 0 ? _payOsOptions.PlatformFeePerBooking : 60_000m;
+
             // Atomically create Booking with status PendingPayment
             var booking = new Booking
             {
@@ -539,11 +543,14 @@ public class ChatService(
                 ScheduledStart = proposal.ScheduledStart,
                 ScheduledEnd = proposal.ScheduledEnd,
                 TotalPrice = proposal.TotalPrice,
+                BaseServicesPrice = proposal.TotalPrice,
+                PlatformFee = platformFee,
                 AddressSnapshot = proposal.AddressSnapshot,
                 LatitudeSnapshot = proposal.LatitudeSnapshot,
                 LongitudeSnapshot = proposal.LongitudeSnapshot,
                 Status = (int)BookingStatus.PendingPayment,
                 ConversationId = conversationId,
+                PaymentHoldStartedAt = nowUtc,
                 CreatedAt = nowUtc
             };
 
@@ -888,6 +895,7 @@ public class ChatService(
             }
 
             var finalPrice = proposal.CounterPrice.Value;
+            var platformFee = _payOsOptions.PlatformFeePerBooking > 0 ? _payOsOptions.PlatformFeePerBooking : 60_000m;
 
             // Atomically create Booking with status PendingPayment
             var booking = new Booking
@@ -901,11 +909,13 @@ public class ChatService(
                 ScheduledEnd = proposal.ScheduledEnd,
                 TotalPrice = finalPrice,
                 BaseServicesPrice = finalPrice,
+                PlatformFee = platformFee,
                 AddressSnapshot = proposal.AddressSnapshot,
                 LatitudeSnapshot = proposal.LatitudeSnapshot,
                 LongitudeSnapshot = proposal.LongitudeSnapshot,
                 Status = (int)BookingStatus.PendingPayment,
                 ConversationId = conversationId,
+                PaymentHoldStartedAt = nowUtc,
                 CreatedAt = nowUtc
             };
 

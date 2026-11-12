@@ -14,6 +14,12 @@ public interface IWalletRepository
     /// <summary>True if a transaction of the given type already exists for the booking (idempotency guard).</summary>
     Task<bool> HasTransactionAsync(Guid walletId, Guid bookingId, int type, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns total settled BookingEarning and total already deducted RefundDeduction for a booking.</summary>
+    Task<(decimal TotalSettled, decimal TotalDeducted)> GetBookingSettlementSummaryAsync(
+        Guid walletId,
+        Guid bookingId,
+        CancellationToken cancellationToken = default);
+
     Task<(List<WalletTransaction> Items, int TotalCount)> GetTransactionsPagedAsync(
         Guid walletId,
         int skip,
