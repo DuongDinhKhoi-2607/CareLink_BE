@@ -33,11 +33,13 @@ public class BookingService(
     CareLinkDbContext dbContext,
     INurseSearchService nurseSearchService,
     IOptions<BookingOptions> options,
+    IOptions<PayOsOptions> payOsOptions,
     ILogger<BookingService> logger) : IBookingService
 {
     private static readonly CultureInfo ViCulture = CultureInfo.GetCultureInfo("vi-VN");
 
     private readonly BookingOptions _options = options.Value;
+    private readonly PayOsOptions _payOsOptions = payOsOptions.Value;
 
     private sealed record Actor(Guid UserId, UserRole Role, Guid? CustomerId, Guid? NurseId);
 
@@ -215,7 +217,7 @@ public class BookingService(
             : 0m;
 
         var totalPrice = baseServicesPrice + extraMinutesPrice;
-        const decimal platformFee = 60_000m;
+        var platformFee = _payOsOptions.PlatformFeePerBooking > 0 ? _payOsOptions.PlatformFeePerBooking : 60_000m;
 
         // Serializable: two customers racing for the same nurse/slot cannot both succeed.
         var bookingId = await unitOfWork.ExecuteInTransactionAsync(async () =>
@@ -251,7 +253,7 @@ public class BookingService(
             foreach (var b in dayBookings)
             {
                 // Bỏ qua đơn giữ chỗ đã hết hạn thanh toán
-                if (b.Status == (int)BookingStatus.PendingPayment && (b.NurseConfirmedAt ?? b.CreatedAt) < holdCutoff)
+                if (b.Status == (int)BookingStatus.PendingPayment && (b.PaymentHoldStartedAt ?? b.CreatedAt) < holdCutoff)
                 {
                     continue;
                 }
@@ -394,7 +396,7 @@ public class BookingService(
                       ?? throw new NotFoundException("Booking not found.");
 
         EnsureParticipant(actor, booking);
-        return booking.ToResponse();
+        return booking.ToResponse(_options.PendingPaymentHoldMinutes);
     }
 
     // ───────────────────────── Book-03a / 03b / 04 / 05 / 06 ─────────────────────────
@@ -406,7 +408,7 @@ public class BookingService(
             BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.PendingPayment);
 
             booking.Status = (int)BookingStatus.PendingPayment;
-            booking.NurseConfirmedAt = now;
+            booking.PaymentHoldStartedAt = now;
 
             await NotifyAsync(
                 booking.Customer.UserId,
@@ -728,9 +730,9 @@ public class BookingService(
             {
                 await NotifyAsync(
                     booking.Customer.UserId,
-                    "Hoàn tiền ca chăm sóc đã hủy",
-                    $"Bạn đã hủy ca hẹn lúc {FormatTime(booking.ScheduledStart)}.{RefundSentence(refund)} Số tiền đã được hoàn vào Ví tiền CareLink của bạn.",
-                    NotificationTypes.WalletCredited,
+                    "Ghi nhận hoàn tiền ca chăm sóc đã hủy",
+                    $"Bạn đã hủy ca hẹn lúc {FormatTime(booking.ScheduledStart)}.{RefundSentence(refund)} Khoản tiền đủ điều kiện hoàn sẽ được CareLink đối soát và hoàn trả theo phương thức thanh toán ban đầu.",
+                    NotificationTypes.PaymentRefunded,
                     booking.Id,
                     cancellationToken);
             }
@@ -871,7 +873,7 @@ public class BookingService(
             await apply(actor, booking, DateTime.UtcNow);
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return booking.ToResponse();
+            return booking.ToResponse(_options.PendingPaymentHoldMinutes);
         }, IsolationLevel.Serializable, cancellationToken);
 
     private async Task<Actor> ResolveActorAsync(Guid userId, CancellationToken cancellationToken)
