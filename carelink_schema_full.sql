@@ -268,6 +268,7 @@ CREATE TABLE public.bookings (
                     -- 4=InProgress | 5=Completed | 6=Canceled | 7=Disputed
     -- Timestamps cho từng bước (audit)
     accepted_at     TIMESTAMPTZ,
+    payment_hold_started_at TIMESTAMPTZ,
     started_at      TIMESTAMPTZ,
     completed_at    TIMESTAMPTZ,
     canceled_at     TIMESTAMPTZ,
@@ -389,7 +390,7 @@ CREATE TABLE public.payments (
     id                  UUID        NOT NULL DEFAULT gen_random_uuid(),
     booking_id          UUID        NOT NULL,
     amount              NUMERIC     NOT NULL CHECK (amount >= 0),
-    platform_fee        NUMERIC     NOT NULL DEFAULT 50000 CHECK (platform_fee >= 0),
+    platform_fee        NUMERIC     NOT NULL DEFAULT 60000 CHECK (platform_fee >= 0),
     payment_method      INTEGER     NOT NULL
                         CHECK (payment_method IN (1, 2, 3, 4)),
                         -- 1=PayOS | 2=VNPay | 3=MoMo | 4=Wallet
@@ -416,7 +417,7 @@ CREATE TABLE public.payments (
 CREATE TABLE public.wallets (
     id              UUID        NOT NULL DEFAULT gen_random_uuid(),
     nurse_id        UUID        NOT NULL,
-    balance         NUMERIC     NOT NULL DEFAULT 0 CHECK (balance >= 0),
+    balance         NUMERIC     NOT NULL DEFAULT 0, -- Có thể âm khi khấu trừ hoàn tiền và tự động bù trừ từ thu nhập ca sau
     total_earned    NUMERIC     NOT NULL DEFAULT 0,  -- Tổng thu nhập lịch sử
     total_withdrawn NUMERIC     NOT NULL DEFAULT 0,  -- Tổng đã rút
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -432,7 +433,7 @@ CREATE TABLE public.wallet_transactions (
     booking_id      UUID,       -- NULL nếu là giao dịch rút tiền
     type            INTEGER     NOT NULL
                     CHECK (type IN (1, 2, 3, 4)),
-                    -- 1=Earning | 2=PlatformFee | 3=Payout | 4=Refund
+                    -- 1=BookingEarning | 2=RefundDeduction | 3=Withdrawal | 4=PlatformFee
     amount          NUMERIC     NOT NULL,
     balance_after   NUMERIC     NOT NULL,   -- Số dư ví sau giao dịch
     description     TEXT,
@@ -653,7 +654,7 @@ CREATE INDEX idx_bookings_nurse ON public.bookings(nurse_id);
 CREATE INDEX idx_bookings_status ON public.bookings(status);
 CREATE INDEX idx_bookings_scheduled ON public.bookings(scheduled_start);
 -- Job-01: Query booking PendingPayment quá 30 phút
-CREATE INDEX idx_bookings_pending_payment ON public.bookings(created_at)
+CREATE INDEX idx_bookings_pending_payment ON public.bookings((COALESCE(payment_hold_started_at, created_at)))
     WHERE status = 1;
 
 -- Availability

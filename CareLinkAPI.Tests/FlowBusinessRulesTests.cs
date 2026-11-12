@@ -1,6 +1,9 @@
 using CareLinkAPI.Common.Constants;
 using CareLinkAPI.Common.Enums;
+using CareLinkAPI.Common.Exceptions;
+using CareLinkAPI.DTOs.Bookings;
 using CareLinkAPI.DTOs.NurseProfile;
+using CareLinkAPI.DTOs.Wallet;
 using CareLinkAPI.Models;
 using CareLinkAPI.Repositories;
 using CareLinkAPI.Services;
@@ -46,6 +49,20 @@ public class FlowBusinessRulesTests
                 t.BookingId == bookingId &&
                 t.Type == transactionType);
             return Task.FromResult(exists);
+        }
+
+        public Task<(decimal TotalSettled, decimal TotalDeducted)> GetBookingSettlementSummaryAsync(
+            Guid walletId,
+            Guid bookingId,
+            CancellationToken cancellationToken = default)
+        {
+            var settled = Transactions
+                .Where(t => t.WalletId == walletId && t.BookingId == bookingId && t.Type == (int)WalletTransactionType.BookingEarning && t.Amount > 0m)
+                .Sum(t => t.Amount);
+            var deducted = Transactions
+                .Where(t => t.WalletId == walletId && t.BookingId == bookingId && t.Type == (int)WalletTransactionType.RefundDeduction)
+                .Sum(t => t.Amount < 0m ? -t.Amount : t.Amount);
+            return Task.FromResult((settled, deducted));
         }
 
         public Task<(List<WalletTransaction> Items, int TotalCount)> GetTransactionsPagedAsync(
@@ -114,9 +131,16 @@ public class FlowBusinessRulesTests
 
     private class FakeUserRepository : IUserRepository
     {
-        public Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
-        public Task<User?> GetByIdForUpdateAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
-        public Task<User?> GetWithProfilesByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult<User?>(null);
+        public Dictionary<Guid, User> Users { get; } = new();
+
+        public Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            Users.TryGetValue(id, out var user);
+            return Task.FromResult(user);
+        }
+
+        public Task<User?> GetByIdForUpdateAsync(Guid id, CancellationToken cancellationToken = default) => GetByIdAsync(id, cancellationToken);
+        public Task<User?> GetWithProfilesByIdAsync(Guid id, CancellationToken cancellationToken = default) => GetByIdAsync(id, cancellationToken);
         public void Update(User user) { }
     }
 
@@ -288,5 +312,118 @@ public class FlowBusinessRulesTests
     {
         decimal invalidAmount = 500m; // Less than 1000 VND
         Assert.True(invalidAmount < 1000m, "Payment amount below 1000 VND should not be allowed by PayOS");
+    }
+
+    [Fact]
+    public async Task DeductRefund_CapsAtSettledEarning_AllowsNegativeBalance_AndPreventsDuplicates()
+    {
+        var walletRepo = new FakeWalletRepository();
+        var payoutRepo = new FakePayoutRepository();
+        var nurseRepo = new FakeNurseRepository();
+        var userRepo = new FakeUserRepository();
+        var notifRepo = new FakeNotificationRepository();
+        var uow = new FakeUnitOfWork();
+        var walletService = new WalletService(walletRepo, payoutRepo, nurseRepo, userRepo, notifRepo, uow, NullLogger<WalletService>.Instance);
+
+        var nurseId = Guid.NewGuid();
+        var walletId = Guid.NewGuid();
+        var bookingA = Guid.NewGuid();
+        var bookingB = Guid.NewGuid();
+
+        // Nurse already withdrew previous earning, so balance is 0 while bookingA had 100k settled
+        walletRepo.WalletsByNurseId[nurseId] = new Wallet
+        {
+            Id = walletId,
+            NurseId = nurseId,
+            Balance = 0m,
+            TotalEarned = 100_000m
+        };
+        walletRepo.Transactions.Add(new WalletTransaction
+        {
+            Id = Guid.NewGuid(),
+            WalletId = walletId,
+            BookingId = bookingA,
+            Type = (int)WalletTransactionType.BookingEarning,
+            Amount = 100_000m,
+            BalanceAfter = 100_000m,
+            CreatedAt = DateTime.UtcNow.AddDays(-1)
+        });
+
+        // Attempt to deduct 250k (exceeds 100k settled) -> capped at 100k, wallet balance goes to -100k
+        var firstDeducted = await walletService.DeductRefundAsync(nurseId, bookingA, 250_000m, "Hoàn tiền khiếu nại ca A");
+        Assert.Equal(100_000m, firstDeducted);
+        Assert.Equal(-100_000m, walletRepo.WalletsByNurseId[nurseId].Balance);
+
+        // Duplicate refund deduction attempt for same bookingA -> deducts 0
+        var duplicateDeducted = await walletService.DeductRefundAsync(nurseId, bookingA, 100_000m, "Trừ trùng");
+        Assert.Equal(0m, duplicateDeducted);
+        Assert.Equal(-100_000m, walletRepo.WalletsByNurseId[nurseId].Balance);
+
+        // Next completed booking B settles 500k -> offsets -100k debt to +400k
+        await walletService.SettleBookingEarningAsync(nurseId, bookingB, 500_000m, 60_000m);
+        Assert.Equal(400_000m, walletRepo.WalletsByNurseId[nurseId].Balance);
+    }
+
+    [Fact]
+    public async Task CreatePayout_WhenBalanceIsNegative_ThrowsBusinessRuleException()
+    {
+        var walletRepo = new FakeWalletRepository();
+        var payoutRepo = new FakePayoutRepository();
+        var nurseRepo = new FakeNurseRepository();
+        var userRepo = new FakeUserRepository();
+        var notifRepo = new FakeNotificationRepository();
+        var uow = new FakeUnitOfWork();
+        var walletService = new WalletService(walletRepo, payoutRepo, nurseRepo, userRepo, notifRepo, uow, NullLogger<WalletService>.Instance);
+
+        var userId = Guid.NewGuid();
+        var nurseId = Guid.NewGuid();
+        userRepo.Users[userId] = new User { Id = userId, Role = (int)UserRole.Nurse, IsActive = true };
+        nurseRepo.Nurses[nurseId] = new Nurse { Id = nurseId, UserId = userId, IsAcceptingBookings = true };
+        walletRepo.WalletsByNurseId[nurseId] = new Wallet
+        {
+            Id = Guid.NewGuid(),
+            NurseId = nurseId,
+            Balance = -100_000m,
+            TotalEarned = 0m
+        };
+
+        var request = new CreatePayoutRequest
+        {
+            Amount = 100_000m,
+            BankName = "Vietcombank",
+            BankAccountNumber = "0123456789",
+            BankAccountName = "NGUYEN VAN A"
+        };
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() => walletService.CreatePayoutAsync(userId, request));
+    }
+
+    [Fact]
+    public void BookingMappings_ToResponse_UsesPaymentHoldStartedAt_WithoutMixingNurseConfirmedAt()
+    {
+        var createdAt = new DateTime(2026, 11, 10, 8, 0, 0, DateTimeKind.Utc);
+        var holdStartedAt = new DateTime(2026, 11, 10, 9, 15, 0, DateTimeKind.Utc);
+
+        var booking = new Booking
+        {
+            Id = Guid.NewGuid(),
+            Status = (int)BookingStatus.PendingPayment,
+            TotalPrice = 300_000m,
+            PlatformFee = 60_000m,
+            CreatedAt = createdAt,
+            PaymentHoldStartedAt = holdStartedAt,
+            NurseConfirmedAt = null,
+            Customer = new Customer { Id = Guid.NewGuid(), FullName = "Nguyễn Văn Khách" },
+            Nurse = new Nurse { Id = Guid.NewGuid(), FullName = "Trần Thị Điều Dưỡng" },
+            Recipient = new CareRecipient { Id = Guid.NewGuid(), FullName = "Cụ Nguyễn Văn A" }
+        };
+
+        var dto = booking.ToResponse(pendingPaymentHoldMinutes: 30);
+
+        Assert.Equal(holdStartedAt, dto.PaymentHoldStartedAt);
+        Assert.Equal(holdStartedAt.AddMinutes(30), dto.PaymentHoldExpiresAt);
+        Assert.Null(dto.NurseConfirmedAt);
+        Assert.Equal(60_000m, dto.PlatformFee);
+        Assert.Equal(360_000m, dto.TotalPaymentAmount);
     }
 }
