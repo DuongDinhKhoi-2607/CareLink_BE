@@ -76,23 +76,40 @@ public class WalletService(
         string reason,
         CancellationToken cancellationToken = default)
     {
+        if (amount <= 0m)
+        {
+            return 0m;
+        }
+
         var wallet = await wallets.GetByNurseIdAsync(nurseId, cancellationToken);
-        if (wallet is null
-            || amount <= 0
-            || !await wallets.HasTransactionAsync(wallet.Id, bookingId, (int)WalletTransactionType.BookingEarning, cancellationToken))
+        if (wallet is null)
+        {
+            return 0m;
+        }
+
+        var (totalSettled, totalDeducted) = await wallets.GetBookingSettlementSummaryAsync(
+            wallet.Id,
+            bookingId,
+            cancellationToken);
+
+        if (totalSettled <= 0m)
         {
             // Nothing was ever credited for this booking, so there is nothing to take back.
             return 0m;
         }
 
-        if (await wallets.HasTransactionAsync(wallet.Id, bookingId, (int)WalletTransactionType.RefundDeduction, cancellationToken))
+        // Cumulative cap: never deduct more than what was actually settled for this booking,
+        // and never duplicate an already recorded refund deduction.
+        var desiredCumulativeDeduction = Math.Min(amount, totalSettled);
+        var deductAmount = Math.Max(desiredCumulativeDeduction - totalDeducted, 0m);
+        if (deductAmount <= 0m)
         {
             return 0m;
         }
 
         var now = DateTime.UtcNow;
-        wallet.Balance -= amount; // may go negative: the debt is recovered from future earnings.
-        wallet.TotalEarned -= amount;
+        wallet.Balance -= deductAmount; // may go negative: the debt is recovered from future earnings.
+        wallet.TotalEarned -= deductAmount;
         wallet.UpdatedAt = now;
 
         await wallets.AddTransactionAsync(new WalletTransaction
@@ -101,13 +118,13 @@ public class WalletService(
             WalletId = wallet.Id,
             BookingId = bookingId,
             Type = (int)WalletTransactionType.RefundDeduction,
-            Amount = -amount,
+            Amount = -deductAmount,
             BalanceAfter = wallet.Balance,
             Description = $"Khấu trừ hoàn tiền: {reason}",
             CreatedAt = now
         }, cancellationToken);
 
-        return amount;
+        return deductAmount;
     }
 
     // ───────────────────────── Nurse: wallet ─────────────────────────
@@ -164,10 +181,17 @@ public class WalletService(
             var wallet = await wallets.GetByNurseIdAsync(nurse.Id, cancellationToken)
                          ?? throw new BusinessRuleException("Ví của bạn chưa có số dư.");
 
+            if (wallet.Balance <= 0m)
+            {
+                throw new BusinessRuleException(wallet.Balance < 0m
+                    ? $"Ví của bạn đang âm ({Money(wallet.Balance)}) do khấu trừ hoàn tiền. Thu nhập các ca tiếp theo sẽ tự động bù trừ phần âm trước khi rút tiền."
+                    : "Ví của bạn chưa có số dư khả dụng để rút tiền.");
+            }
+
             var pending = await payouts.GetPendingTotalAsync(wallet.Id, cancellationToken);
             var available = wallet.Balance - pending;
 
-            if (request.Amount > available)
+            if (available <= 0m || request.Amount > available)
             {
                 throw new BusinessRuleException(
                     $"Số dư khả dụng không đủ. Khả dụng: {Money(available)} (đang chờ duyệt: {Money(pending)}).");

@@ -1,3 +1,4 @@
+using System.Data;
 using CareLinkAPI.Common.Enums;
 using CareLinkAPI.Common.Exceptions;
 using CareLinkAPI.Common.Models;
@@ -52,7 +53,7 @@ public class DisputeService : IDisputeService
         // State check: Booking must be Completed
         if (booking.Status != (int)BookingStatus.Completed)
         {
-            throw new BusinessRuleException("Chỉ có thể gửi khiếu nại đối với ca chăm sóc đã hoàn tất (Completed).");
+            throw new BusinessRuleException("Chỉ có thể gửi khiếu nại đối với ca chăm sóc đã hoàn tất.");
         }
 
         // Active dispute limit: at most 1 Open/Processing dispute per booking
@@ -93,59 +94,79 @@ public class DisputeService : IDisputeService
             throw new ForbiddenException("Chỉ Quản trị viên (Admin) mới có quyền xử lý khiếu nại.");
         }
 
-        var dispute = await _disputeRepository.GetByIdAsync(id, ct)
-            ?? throw new NotFoundException(nameof(Dispute), id);
-
-        if (dispute.Status == (int)DisputeStatus.Resolved || dispute.Status == (int)DisputeStatus.Dismissed)
+        if (dto.ResolutionType is not (1 or 2))
         {
-            throw new BusinessRuleException("Khiếu nại này đã được đóng trước đó.");
+            throw new BusinessRuleException("Hình thức xử lý khiếu nại không hợp lệ.");
         }
 
-        var booking = await _bookingRepository.GetByIdAsync(dispute.BookingId, asNoTracking: false, ct)
-            ?? throw new NotFoundException("Booking", dispute.BookingId);
-
-        if (dto.ResolutionType == 1) // 1=Refunded
+        return await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            if (dto.RefundAmount > booking.TotalPrice)
+            var dispute = await _disputeRepository.GetByIdAsync(id, ct)
+                ?? throw new NotFoundException(nameof(Dispute), id);
+
+            if (dispute.Status == (int)DisputeStatus.Resolved || dispute.Status == (int)DisputeStatus.Dismissed)
             {
-                throw new BusinessRuleException($"Số tiền hoàn ({dto.RefundAmount:N0} đ) không được vượt quá giá trị ca ({booking.TotalPrice:N0} đ).");
+                throw new BusinessRuleException("Khiếu nại này đã được đóng trước đó.");
             }
 
-            if (dto.RefundAmount > 0)
+            var booking = await _bookingRepository.GetByIdAsync(dispute.BookingId, asNoTracking: false, ct)
+                ?? throw new NotFoundException("Booking", dispute.BookingId);
+
+            if (dto.ResolutionType == 1) // 1=Refunded (approved manual refund entitlement)
             {
-                await _paymentQueryService.ProcessDisputeRefundAsync(
+                if (dto.RefundAmount <= 0m)
+                {
+                    throw new BusinessRuleException("Số tiền hoàn khi chấp thuận hoàn tiền phải lớn hơn 0.");
+                }
+
+                if (dto.RefundAmount > booking.TotalPrice)
+                {
+                    throw new BusinessRuleException($"Số tiền hoàn ({dto.RefundAmount:N0} đ) không được vượt quá giá trị ca ({booking.TotalPrice:N0} đ).");
+                }
+
+                if (await _disputeRepository.HasResolvedRefundDisputeForBookingAsync(dispute.BookingId, dispute.Id, ct))
+                {
+                    throw new ConflictException("Ca chăm sóc này đã có khiếu nại được duyệt hoàn tiền trước đó.");
+                }
+
+                var refundProcessed = await _paymentQueryService.ProcessDisputeRefundAsync(
                     dispute.BookingId,
                     dispute.CustomerId,
                     dto.RefundAmount,
                     dto.ResolutionNote ?? "Hoàn tiền theo giải quyết khiếu nại",
                     ct);
+
+                if (!refundProcessed)
+                {
+                    throw new BusinessRuleException("Không thể ghi nhận hoàn tiền cho khiếu nại này.");
+                }
+
+                dispute.Status = (int)DisputeStatus.Resolved;
+                dispute.ResolutionType = 1;
+                dispute.RefundAmount = dto.RefundAmount;
+            }
+            else // 2=Dismissed
+            {
+                dispute.Status = (int)DisputeStatus.Dismissed;
+                dispute.ResolutionType = 2;
+                dispute.RefundAmount = 0m;
             }
 
-            dispute.Status = (int)DisputeStatus.Resolved;
-            dispute.ResolutionType = 1;
-            dispute.RefundAmount = dto.RefundAmount;
-        }
-        else // 2=Dismissed
-        {
-            dispute.Status = (int)DisputeStatus.Dismissed;
-            dispute.ResolutionType = 2;
-            dispute.RefundAmount = 0;
-        }
+            dispute.ResolutionNote = dto.ResolutionNote?.Trim();
+            dispute.ResolvedBy = currentUserId;
+            dispute.ResolvedAt = DateTime.UtcNow;
 
-        dispute.ResolutionNote = dto.ResolutionNote?.Trim();
-        dispute.ResolvedBy = currentUserId;
-        dispute.ResolvedAt = DateTime.UtcNow;
+            // Transition booking status back from Disputed to Completed
+            if (booking.Status == (int)BookingStatus.Disputed)
+            {
+                BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Completed);
+                booking.Status = (int)BookingStatus.Completed;
+            }
 
-        // Transition booking status back from Disputed to Completed
-        if (booking.Status == (int)BookingStatus.Disputed)
-        {
-            BookingStateMachine.EnsureCanTransition((BookingStatus)booking.Status, BookingStatus.Completed);
-            booking.Status = (int)BookingStatus.Completed;
-        }
-
-        await _disputeRepository.UpdateAsync(dispute, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
-        return MapToResponseDto(dispute);
+            await _disputeRepository.UpdateAsync(dispute, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+            return MapToResponseDto(dispute);
+        }, IsolationLevel.Serializable, ct);
     }
 
     public async Task<DisputeResponseDto> GetDisputeByIdAsync(Guid id, CancellationToken ct = default)
