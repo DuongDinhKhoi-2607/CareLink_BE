@@ -4,6 +4,7 @@ using CareLinkAPI.Contracts.Clinical;
 using CareLinkAPI.Contracts.Payment;
 using CareLinkAPI.Repositories;
 using CareLinkAPI.Services;
+using CareLinkAPI.Services.Analytics;
 using CareLinkAPI.Services.Auth;
 using CareLinkAPI.Services.Backoffice;
 using CareLinkAPI.Services.Clinical;
@@ -79,6 +80,10 @@ public static class ServiceCollectionExtensions
 
         // Module 4: Notification System
         services.AddScoped<INotificationService, NotificationService>();
+
+        // Website Activity Tracking & Analytics (EXE Outcome 3)
+        services.AddScoped<ITrackingService, TrackingService>();
+        services.AddScoped<IAnalyticsService, AnalyticsService>();
 
         return services;
     }

@@ -46,4 +46,8 @@ public partial class User
     public virtual ICollection<BookingProposal> BookingProposals { get; set; } = new List<BookingProposal>();
 
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
+
+    public virtual ICollection<VisitorSession> VisitorSessions { get; set; } = new List<VisitorSession>();
+
+    public virtual ICollection<UserActivityLog> ActivityLogs { get; set; } = new List<UserActivityLog>();
 }
