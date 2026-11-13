@@ -82,25 +82,32 @@ public class TrackingService : ITrackingService
 
         // 4. Xử lý phiên truy cập (visitor_sessions)
         var session = await _dbContext.VisitorSessions
-            .FirstOrDefaultAsync(s => s.Id == request.SessionId, ct);
+            .FirstOrDefaultAsync(s => s.SessionId == request.SessionId, ct);
 
         var isPageView = string.Equals(normalizedEventType, "PAGE_VIEW", StringComparison.OrdinalIgnoreCase);
+
+        var roleName = currentUserRole switch
+        {
+            1 => "ADMIN",
+            2 => "CUSTOMER",
+            3 => "NURSE",
+            _ => "GUEST"
+        };
 
         if (session == null)
         {
             session = new VisitorSession
             {
-                Id = request.SessionId,
                 VisitorId = request.VisitorId,
+                SessionId = request.SessionId,
                 UserId = currentUserId,
-                UserRole = currentUserRole,
+                UserRole = roleName,
                 DeviceType = deviceType,
                 Browser = browser,
-                OperatingSystem = os,
-                LandingPage = sanitizedUrl,
-                ExitPage = sanitizedUrl,
-                PageViewsCount = isPageView ? 1 : 0,
-                EventsCount = 1,
+                Os = os,
+                FirstPageUrl = sanitizedUrl,
+                PageViewCount = isPageView ? 1 : 0,
+                IsBounce = true,
                 StartedAt = DateTime.UtcNow,
                 LastActiveAt = DateTime.UtcNow
             };
@@ -109,18 +116,17 @@ public class TrackingService : ITrackingService
         else
         {
             session.LastActiveAt = DateTime.UtcNow;
-            session.ExitPage = sanitizedUrl;
-            session.EventsCount++;
             if (isPageView)
             {
-                session.PageViewsCount++;
+                session.PageViewCount++;
+                session.IsBounce = false;
             }
 
             // Identity Stitching: Nếu trước đó là Guest, nay vừa login thì gắn User ID vào Session
             if (currentUserId.HasValue && !session.UserId.HasValue)
             {
                 session.UserId = currentUserId.Value;
-                session.UserRole = currentUserRole;
+                session.UserRole = roleName;
             }
         }
 
@@ -153,11 +159,9 @@ public class TrackingService : ITrackingService
 
         var log = new UserActivityLog
         {
-            Id = Guid.NewGuid(),
             SessionId = request.SessionId,
             VisitorId = request.VisitorId,
             UserId = currentUserId,
-            UserRole = currentUserRole,
             EventType = normalizedEventType,
             PageUrl = sanitizedUrl,
             PageTitle = request.PageTitle != null && request.PageTitle.Length > 255

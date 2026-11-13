@@ -13,8 +13,6 @@ public partial class UserActivityLog
 
     public Guid? UserId { get; set; }
 
-    public int? UserRole { get; set; }
-
     public string EventType { get; set; } = null!;
 
     public string PageUrl { get; set; } = null!;
@@ -25,8 +23,5 @@ public partial class UserActivityLog
 
     public DateTime CreatedAt { get; set; }
 
-    public virtual VisitorSession Session { get; set; } = null!;
-
     public virtual User? User { get; set; }
 }
-

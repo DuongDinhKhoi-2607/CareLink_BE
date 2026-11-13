@@ -155,16 +155,23 @@ public class AnalyticsService : IAnalyticsService
         // 5. Nhật ký hoạt động thời gian thực (Top 20 hoạt động mới nhất)
         var rawLogs = await _dbContext.UserActivityLogs
             .AsNoTracking()
-            .Include(l => l.Session)
             .Include(l => l.User).ThenInclude(u => u!.Customer)
             .Include(l => l.User).ThenInclude(u => u!.Nurse)
             .OrderByDescending(l => l.CreatedAt)
             .Take(20)
             .ToListAsync(ct);
 
+        var sessionIds = rawLogs.Select(l => l.SessionId).Distinct().ToList();
+        var sessionsMap = await _dbContext.VisitorSessions
+            .AsNoTracking()
+            .Where(s => sessionIds.Contains(s.SessionId))
+            .GroupBy(s => s.SessionId)
+            .ToDictionaryAsync(g => g.Key, g => g.First().DeviceType, ct);
+
         var recentActivities = rawLogs.Select(l =>
         {
-            var (eventNameVi, userRoleName, userDisplayName, deviceType) = FormatLogDisplay(l);
+            sessionsMap.TryGetValue(l.SessionId, out var rawDevice);
+            var (eventNameVi, userRoleName, userDisplayName, deviceType) = FormatLogDisplay(l, rawDevice);
             var timeAgo = FormatTimeAgo(l.CreatedAt, now);
 
             return new RecentActivityItemDto
@@ -200,7 +207,7 @@ public class AnalyticsService : IAnalyticsService
         };
     }
 
-    private static (string EventNameVi, string UserRoleName, string UserDisplayName, string DeviceType) FormatLogDisplay(UserActivityLog log)
+    private static (string EventNameVi, string UserRoleName, string UserDisplayName, string DeviceType) FormatLogDisplay(UserActivityLog log, string? rawDevice)
     {
         // 1. Tên sự kiện tiếng Việt chuẩn y tế / kinh doanh
         string eventNameVi = log.EventType switch
@@ -221,7 +228,7 @@ public class AnalyticsService : IAnalyticsService
         };
 
         // 2. Vai trò người dùng tiếng Việt
-        string userRoleName = log.UserRole switch
+        string userRoleName = log.User?.Role switch
         {
             (int)UserRole.Admin => "Quản trị viên",
             (int)UserRole.Customer => "Khách hàng",
@@ -246,8 +253,8 @@ public class AnalyticsService : IAnalyticsService
         }
 
         // 4. Thiết bị tiếng Việt
-        var rawDevice = log.Session?.DeviceType ?? "Desktop";
-        string deviceType = rawDevice.Equals("Mobile", StringComparison.OrdinalIgnoreCase) ? "Điện thoại" : "Máy tính";
+        var device = rawDevice ?? "Desktop";
+        string deviceType = device.Equals("Mobile", StringComparison.OrdinalIgnoreCase) ? "Điện thoại" : "Máy tính";
 
         return (eventNameVi, userRoleName, userDisplayName, deviceType);
     }

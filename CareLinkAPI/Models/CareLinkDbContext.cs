@@ -1174,24 +1174,26 @@ public partial class CareLinkDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("visitor_sessions_pkey");
             entity.ToTable("visitor_sessions");
 
-            entity.Property(e => e.Id).HasMaxLength(64).HasColumnName("id");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()").HasColumnName("id");
             entity.Property(e => e.VisitorId).HasMaxLength(64).HasColumnName("visitor_id");
+            entity.Property(e => e.SessionId).HasMaxLength(64).HasColumnName("session_id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.UserRole).HasColumnName("user_role");
+            entity.Property(e => e.UserRole).HasMaxLength(32).HasDefaultValue("GUEST").HasColumnName("user_role");
+            entity.Property(e => e.IpAddress).HasMaxLength(45).HasColumnName("ip_address");
+            entity.Property(e => e.UserAgent).HasColumnType("text").HasColumnName("user_agent");
             entity.Property(e => e.DeviceType).HasMaxLength(20).HasDefaultValue("Desktop").HasColumnName("device_type");
             entity.Property(e => e.Browser).HasMaxLength(50).HasColumnName("browser");
-            entity.Property(e => e.OperatingSystem).HasMaxLength(50).HasColumnName("operating_system");
-            entity.Property(e => e.LandingPage).HasMaxLength(255).HasColumnName("landing_page");
-            entity.Property(e => e.ExitPage).HasMaxLength(255).HasColumnName("exit_page");
-            entity.Property(e => e.PageViewsCount).HasDefaultValue(1).HasColumnName("page_views_count");
-            entity.Property(e => e.EventsCount).HasDefaultValue(1).HasColumnName("events_count");
+            entity.Property(e => e.Os).HasMaxLength(50).HasColumnName("os");
+            entity.Property(e => e.FirstPageUrl).HasColumnType("text").HasColumnName("first_page_url");
+            entity.Property(e => e.PageViewCount).HasDefaultValue(1).HasColumnName("page_view_count");
+            entity.Property(e => e.IsBounce).HasDefaultValue(true).HasColumnName("is_bounce");
             entity.Property(e => e.StartedAt).HasDefaultValueSql("now()").HasColumnName("started_at");
             entity.Property(e => e.LastActiveAt).HasDefaultValueSql("now()").HasColumnName("last_active_at");
 
             entity.HasOne(d => d.User).WithMany(p => p.VisitorSessions)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("fk_session_user");
+                .HasConstraintName("fk_visitor_sessions_user");
         });
 
         modelBuilder.Entity<UserActivityLog>(entity =>
@@ -1203,22 +1205,16 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.SessionId).HasMaxLength(64).HasColumnName("session_id");
             entity.Property(e => e.VisitorId).HasMaxLength(64).HasColumnName("visitor_id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.UserRole).HasColumnName("user_role");
             entity.Property(e => e.EventType).HasMaxLength(50).HasColumnName("event_type");
-            entity.Property(e => e.PageUrl).HasMaxLength(255).HasColumnName("page_url");
-            entity.Property(e => e.PageTitle).HasMaxLength(255).HasColumnName("page_title");
+            entity.Property(e => e.PageUrl).HasColumnType("text").HasColumnName("page_url");
+            entity.Property(e => e.PageTitle).HasColumnType("text").HasColumnName("page_title");
             entity.Property(e => e.Metadata).HasColumnType("jsonb").HasColumnName("metadata");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()").HasColumnName("created_at");
-
-            entity.HasOne(d => d.Session).WithMany(p => p.ActivityLogs)
-                .HasForeignKey(d => d.SessionId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("fk_activity_session");
 
             entity.HasOne(d => d.User).WithMany(p => p.ActivityLogs)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("fk_activity_user");
+                .HasConstraintName("fk_user_activity_logs_user");
         });
 
         OnModelCreatingPartial(modelBuilder);
