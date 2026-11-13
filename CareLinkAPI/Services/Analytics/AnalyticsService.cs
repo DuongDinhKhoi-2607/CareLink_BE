@@ -166,12 +166,12 @@ public class AnalyticsService : IAnalyticsService
             .AsNoTracking()
             .Where(s => sessionIds.Contains(s.SessionId))
             .GroupBy(s => s.SessionId)
-            .ToDictionaryAsync(g => g.Key, g => g.First().DeviceType, ct);
+            .ToDictionaryAsync(g => g.Key, g => (DeviceType: g.First().DeviceType, Os: g.First().Os), ct);
 
         var recentActivities = rawLogs.Select(l =>
         {
-            sessionsMap.TryGetValue(l.SessionId, out var rawDevice);
-            var (eventNameVi, userRoleName, userDisplayName, deviceType) = FormatLogDisplay(l, rawDevice);
+            sessionsMap.TryGetValue(l.SessionId, out var sess);
+            var (eventNameVi, userRoleName, userDisplayName, deviceType) = FormatLogDisplay(l, sess.DeviceType, sess.Os);
             var timeAgo = FormatTimeAgo(l.CreatedAt, now);
 
             return new RecentActivityItemDto
@@ -207,7 +207,7 @@ public class AnalyticsService : IAnalyticsService
         };
     }
 
-    private static (string EventNameVi, string UserRoleName, string UserDisplayName, string DeviceType) FormatLogDisplay(UserActivityLog log, string? rawDevice)
+    private static (string EventNameVi, string UserRoleName, string UserDisplayName, string DeviceType) FormatLogDisplay(UserActivityLog log, string? rawDevice, string? rawOs)
     {
         // 1. Tên sự kiện tiếng Việt chuẩn y tế / kinh doanh
         string eventNameVi = log.EventType switch
@@ -217,10 +217,10 @@ public class AnalyticsService : IAnalyticsService
             "VIEW_NURSE" => "Xem hồ sơ điều dưỡng",
             "VIEW_SERVICE" => "Xem dịch vụ y tế",
             "VIEW_HANDBOOK" => "Đọc cẩm nang sức khỏe",
-            "REGISTER" => "Đăng ký tài khoản mới",
-            "LOGIN" => "Đăng nhập hệ thống",
-            "LOGOUT" => "Đăng xuất tài khoản",
-            "CREATE_BOOKING" => "Tạo yêu cầu đặt lịch",
+            "REGISTER" => "Đăng ký tài khoản",
+            "LOGIN" => "Đăng nhập",
+            "LOGOUT" => "Đăng xuất",
+            "CREATE_BOOKING" => "Đặt lịch chăm sóc",
             "PAYMENT_SUCCESS" => "Thanh toán thành công",
             "SEND_MESSAGE" => "Gửi tin nhắn tư vấn",
             "BOOKING_COMPLETED" => "Hoàn tất ca chăm sóc",
@@ -252,9 +252,22 @@ public class AnalyticsService : IAnalyticsService
             userDisplayName = $"Khách vãng lai #{shortId}";
         }
 
-        // 4. Thiết bị tiếng Việt
+        // 4. Thiết bị tiếng Việt thông minh (iPhone, Android, Máy tính Windows/Mac)
         var device = rawDevice ?? "Desktop";
-        string deviceType = device.Equals("Mobile", StringComparison.OrdinalIgnoreCase) ? "Điện thoại" : "Máy tính";
+        var os = rawOs ?? "Other";
+        string deviceType;
+        if (device.Equals("Mobile", StringComparison.OrdinalIgnoreCase))
+        {
+            deviceType = os.Equals("iOS", StringComparison.OrdinalIgnoreCase)
+                ? "iPhone"
+                : (os.Equals("Android", StringComparison.OrdinalIgnoreCase) ? "Android" : "Điện thoại");
+        }
+        else
+        {
+            deviceType = os.Equals("macOS", StringComparison.OrdinalIgnoreCase)
+                ? "Máy tính (Mac)"
+                : (os.Equals("Windows", StringComparison.OrdinalIgnoreCase) ? "Máy tính (Windows)" : "Máy tính");
+        }
 
         return (eventNameVi, userRoleName, userDisplayName, deviceType);
     }
