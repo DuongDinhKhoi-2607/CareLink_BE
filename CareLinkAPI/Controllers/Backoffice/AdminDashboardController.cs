@@ -44,12 +44,22 @@ public class AdminDashboardController : ControllerBase
     }
 
     /// <summary>
-    /// Thống kê lượng truy cập, phễu chuyển đổi và nhật ký hoạt động thời gian thực (EXE Outcome 3)
+    /// Thống kê lượng truy cập, phễu chuyển đổi và nhật ký hoạt động thời gian thực
     /// </summary>
     [HttpGet("analytics")]
     public async Task<ActionResult<WebsiteAnalyticsDto>> GetWebsiteAnalytics([FromQuery] string? range, CancellationToken ct)
     {
         var result = await _analyticsService.GetWebsiteAnalyticsAsync(range, ct);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Dọn dẹp nhật ký tương tác người dùng theo tiêu chí thời gian hoặc loại sự kiện
+    /// </summary>
+    [HttpDelete("analytics/logs")]
+    public async Task<ActionResult> PurgeLogs([FromBody] PurgeLogsRequest request, CancellationToken ct)
+    {
+        var count = await _analyticsService.PurgeLogsAsync(request, ct);
+        return Ok(new { message = $"Đã dọn dẹp thành công {count} sự kiện nhật ký.", deletedCount = count });
     }
 }

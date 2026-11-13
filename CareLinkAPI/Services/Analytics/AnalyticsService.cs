@@ -152,13 +152,13 @@ public class AnalyticsService : IAnalyticsService
             Step5_Paid = successfulPayments
         };
 
-        // 5. Nhật ký hoạt động thời gian thực (Top 20 hoạt động mới nhất)
+        // 5. Nhật ký hoạt động thời gian thực (Top 100 hoạt động mới nhất)
         var rawLogs = await _dbContext.UserActivityLogs
             .AsNoTracking()
             .Include(l => l.User).ThenInclude(u => u!.Customer)
             .Include(l => l.User).ThenInclude(u => u!.Nurse)
             .OrderByDescending(l => l.CreatedAt)
-            .Take(20)
+            .Take(100)
             .ToListAsync(ct);
 
         var sessionIds = rawLogs.Select(l => l.SessionId).Distinct().ToList();
@@ -280,5 +280,59 @@ public class AnalyticsService : IAnalyticsService
         if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} giờ trước";
         if (diff.TotalDays < 7) return $"{(int)diff.TotalDays} ngày trước";
         return pastTime.ToString("dd/MM/yyyy HH:mm");
+    }
+
+    public async Task<int> PurgeLogsAsync(PurgeLogsRequest request, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var query = _dbContext.UserActivityLogs.AsQueryable();
+
+        if (request.PageViewsOnly)
+        {
+            query = query.Where(l => l.EventType == "PAGE_VIEW");
+        }
+
+        switch (request.RangeMode?.ToLowerInvariant())
+        {
+            case "last_1_hour":
+                var oneHourAgo = now.AddHours(-1);
+                query = query.Where(l => l.CreatedAt >= oneHourAgo);
+                break;
+
+            case "last_24_hours":
+                var oneDayAgo = now.AddHours(-24);
+                query = query.Where(l => l.CreatedAt >= oneDayAgo);
+                break;
+
+            case "last_7_days":
+                var sevenDaysAgo = now.AddDays(-7);
+                query = query.Where(l => l.CreatedAt >= sevenDaysAgo);
+                break;
+
+            case "custom_range":
+                if (request.FromDate.HasValue)
+                {
+                    var fromUtc = DateTime.SpecifyKind(request.FromDate.Value.Date, DateTimeKind.Utc);
+                    query = query.Where(l => l.CreatedAt >= fromUtc);
+                }
+                if (request.ToDate.HasValue)
+                {
+                    var toUtc = DateTime.SpecifyKind(request.ToDate.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+                    query = query.Where(l => l.CreatedAt <= toUtc);
+                }
+                break;
+
+            case "all":
+                // Xóa toàn bộ
+                break;
+
+            default:
+                var defaultDayAgo = now.AddHours(-24);
+                query = query.Where(l => l.CreatedAt >= defaultDayAgo);
+                break;
+        }
+
+        var count = await query.ExecuteDeleteAsync(ct);
+        return count;
     }
 }

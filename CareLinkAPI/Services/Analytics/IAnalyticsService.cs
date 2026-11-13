@@ -7,4 +7,5 @@ namespace CareLinkAPI.Services.Analytics;
 public interface IAnalyticsService
 {
     Task<WebsiteAnalyticsDto> GetWebsiteAnalyticsAsync(string? range, CancellationToken ct = default);
+    Task<int> PurgeLogsAsync(PurgeLogsRequest request, CancellationToken ct = default);
 }
