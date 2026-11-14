@@ -152,13 +152,13 @@ public class AnalyticsService : IAnalyticsService
             Step5_Paid = successfulPayments
         };
 
-        // 5. Nhật ký hoạt động thời gian thực (Top 100 hoạt động mới nhất)
+        // 5. Nhật ký hoạt động thời gian thực (Top 200 hoạt động mới nhất)
         var rawLogs = await _dbContext.UserActivityLogs
             .AsNoTracking()
             .Include(l => l.User).ThenInclude(u => u!.Customer)
             .Include(l => l.User).ThenInclude(u => u!.Nurse)
             .OrderByDescending(l => l.CreatedAt)
-            .Take(100)
+            .Take(200)
             .ToListAsync(ct);
 
         var sessionIds = rawLogs.Select(l => l.SessionId).Distinct().ToList();
