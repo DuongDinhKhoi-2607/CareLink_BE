@@ -10,6 +10,7 @@ public class UpdateAddressRequest
     [MaxLength(255)]
     public string? FullAddress { get; set; }
 
+    /// <summary>Alias tương thích với Frontend (FamilyProfile gửi streetAddress).</summary>
     [MaxLength(255)]
     public string? StreetAddress { get; set; }
 

@@ -128,7 +128,7 @@ public class DemoDbSeeder
                 Email = "lan.nguyen@carelink.vn",
                 Name = "Nguyễn Thị Mai Lan",
                 Phone = "0901234567",
-                Avatar = "https://images.unsplash.com/photo-1594824813637-28562d29486c?auto=format&fit=crop&q=80&w=400",
+                Avatar = "/images/nurses/mai-lan.jpg",
                 Bio = "Cử nhân Điều dưỡng ĐH Y Dược TP.HCM. 5 năm kinh nghiệm chuyên sâu chăm sóc người cao tuổi, phục hồi chức năng và bệnh mạn tính.",
                 Edu = "Cử nhân Điều dưỡng - ĐH Y Dược TP.HCM",
                 Exp = 5,
@@ -144,7 +144,7 @@ public class DemoDbSeeder
                 Email = "minh.tran@carelink.vn",
                 Name = "Trần Văn Minh",
                 Phone = "0902345678",
-                Avatar = "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400",
+                Avatar = "/images/nurses/van-minh.jpg",
                 Bio = "Cử nhân Điều dưỡng ĐH Y khoa Phạm Ngọc Thạch. 4 năm kinh nghiệm ngoại khoa, chuyên chăm sóc vết mổ, thay băng và ống dẫn lưu.",
                 Edu = "Cử nhân Điều dưỡng - ĐH Y khoa Phạm Ngọc Thạch",
                 Exp = 4,
@@ -160,7 +160,7 @@ public class DemoDbSeeder
                 Email = "thao.le@carelink.vn",
                 Name = "Lê Thị Thảo",
                 Phone = "0903456789",
-                Avatar = "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400",
+                Avatar = "/images/nurses/le-thao.jpg",
                 Bio = "Sinh viên Y đa khoa năm 5 - ĐH Y Dược TP.HCM. Đã hoàn thành thực tập lâm sàng tại BV Chợ Rẫy, tận tâm, chu đáo và nhiệt tình.",
                 Edu = "Sinh viên Y đa khoa năm 5 - ĐH Y Dược TP.HCM",
                 Exp = 2,
@@ -176,7 +176,7 @@ public class DemoDbSeeder
                 Email = "thao.dang@carelink.vn",
                 Name = "Đặng Thị Thu Thảo",
                 Phone = "0904567891",
-                Avatar = "https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&q=80&w=400",
+                Avatar = "/images/nurses/thu-thao.jpg",
                 Bio = "Cử nhân Điều dưỡng chuyên ngành Sản Nhi. 6 năm chăm sóc mẹ sau sinh và bé sơ sinh tại BV Từ Dũ, hỗ trợ mát-xa và kích sữa an toàn.",
                 Edu = "Cử nhân Điều dưỡng Sản Nhi - ĐH Y Dược TP.HCM",
                 Exp = 6,
@@ -192,7 +192,7 @@ public class DemoDbSeeder
                 Email = "nam.vu@carelink.vn",
                 Name = "Vũ Hoàng Nam",
                 Phone = "0905678912",
-                Avatar = "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=400",
+                Avatar = "/images/nurses/hoang-nam.jpg",
                 Bio = "Sinh viên Điều dưỡng năm 4 ĐH Y khoa Phạm Ngọc Thạch. Năng nổ, cẩn thận, đã có chứng chỉ hồi sinh tim phổi cơ bản (BLS).",
                 Edu = "Sinh viên Điều dưỡng năm 4 - ĐH Y khoa Phạm Ngọc Thạch",
                 Exp = 2,
@@ -208,7 +208,7 @@ public class DemoDbSeeder
                 Email = "chi.hoang@carelink.vn",
                 Name = "Hoàng Kim Chi",
                 Phone = "0906789123",
-                Avatar = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400",
+                Avatar = "/images/nurses/kim-chi.jpg",
                 Bio = "Y tá thực hành 7 năm kinh nghiệm tại phòng khám đa khoa quốc tế. Thành thạo tiêm truyền, truyền dịch theo phác đồ, theo dõi bệnh án chu đáo.",
                 Edu = "Cao đẳng Y tế - Y tá thực hành",
                 Exp = 7,
@@ -224,7 +224,7 @@ public class DemoDbSeeder
                 Email = "quoctpkse182112@fpt.edu.vn",
                 Name = "Trần Phạm Khánh Quốc",
                 Phone = "0934567890",
-                Avatar = "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400",
+                Avatar = "/images/nurses/khanh-quoc.jpg",
                 Bio = "Điều dưỡng viên chính thức CareLink. Sẵn sàng hỗ trợ ca chăm sóc theo yêu cầu tại các quận trung tâm.",
                 Edu = "Cử nhân Điều dưỡng CareLink",
                 Exp = 3,
@@ -240,7 +240,7 @@ public class DemoDbSeeder
                 Email = "vynntse183571@fpt.edu.vn",
                 Name = "Nguyễn Ngọc Tường Vy",
                 Phone = "0945678901",
-                Avatar = "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400",
+                Avatar = "/images/nurses/tuong-vy.jpg",
                 Bio = "Sinh viên Y khoa CareLink. Nhiệt huyết, tận tâm và chăm sóc người bệnh chu đáo theo chuẩn quy trình y tế.",
                 Edu = "Sinh viên Y khoa CareLink",
                 Exp = 2,
@@ -353,8 +353,8 @@ public class DemoDbSeeder
         // Tạo 2 Điều dưỡng đang chờ thẩm định (Pending Verification) để Admin có hồ sơ duyệt
         var pendingNurses = new[]
         {
-            new { Email = "pham.duy@carelink.vn", Name = "Phạm Quốc Duy", District = "Quận Gò Vấp", Edu = "Cao đẳng Y tế Bạch Mai", Exp = 3 },
-            new { Email = "hang.vu@carelink.vn", Name = "Vũ Thị Hằng", District = "Quận 3", Edu = "ĐH Y Dược TP.HCM", Exp = 2 }
+            new { Email = "pham.duy@carelink.vn", Name = "Phạm Quốc Duy", Avatar = "/images/nurses/van-minh.jpg", District = "Quận Gò Vấp", Edu = "Cao đẳng Y tế Bạch Mai", Exp = 3 },
+            new { Email = "hang.vu@carelink.vn", Name = "Vũ Thị Hằng", Avatar = "/images/nurses/kim-chi.jpg", District = "Quận 3", Edu = "ĐH Y Dược TP.HCM", Exp = 2 }
         };
 
         foreach (var p in pendingNurses)
@@ -366,7 +366,7 @@ public class DemoDbSeeder
                 UserId = u.Id,
                 FullName = p.Name,
                 Phone = "0908889999",
-                AvatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400",
+                AvatarUrl = p.Avatar,
                 Bio = "Điều dưỡng viên mới nộp hồ sơ gia nhập mạng lưới CareLink. Rất mong muốn được đóng góp cho cộng đồng.",
                 EducationLevel = p.Edu,
                 ExperienceYears = p.Exp,

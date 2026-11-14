@@ -119,6 +119,10 @@ public class CreateProposalRequest
     /// <summary>Optional saved address ID. When omitted, the care recipient's default address is used.</summary>
     public Guid? AddressId { get; set; }
 
+    /// <summary>Địa chỉ tiếp nhận ca trực nhập trực tiếp (nếu chưa có trong sổ địa chỉ).</summary>
+    [StringLength(255)]
+    public string? CustomAddress { get; set; }
+
     /// <summary>Start time of the visit in ISO 8601 with offset. End time is calculated from service duration.</summary>
     [Required]
     public DateTimeOffset ScheduledStart { get; set; }

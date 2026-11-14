@@ -238,11 +238,17 @@ public class NurseSearchService(
 
             pricingMap.TryGetValue(nurse.Id, out var servicePrice);
 
+            var resolvedAvatar = string.IsNullOrWhiteSpace(nurse.AvatarUrl) ||
+                                 nurse.AvatarUrl.Contains("unsplash.com", StringComparison.OrdinalIgnoreCase) ||
+                                 nurse.AvatarUrl.Contains("caregiver_avatar.svg", StringComparison.OrdinalIgnoreCase)
+                ? CareLinkAPI.Data.DbInitializer.ResolveVietnameseNurseAvatar(nurse.FullName, nurse.PractitionerType)
+                : nurse.AvatarUrl;
+
             results.Add(new NurseSearchItemResponse
             {
                 NurseId = nurse.Id,
                 FullName = nurse.FullName,
-                AvatarUrl = nurse.AvatarUrl,
+                AvatarUrl = resolvedAvatar,
                 Bio = nurse.Bio,
                 EducationLevel = nurse.EducationLevel,
                 ExperienceYears = nurse.ExperienceYears,

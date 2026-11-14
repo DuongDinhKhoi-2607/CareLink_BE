@@ -49,16 +49,19 @@ public class AddressService(
             }
         }
 
-        var fullAddr = !string.IsNullOrWhiteSpace(request.FullAddress)
-            ? request.FullAddress.Trim()
-            : (!string.IsNullOrWhiteSpace(request.StreetAddress) ? request.StreetAddress.Trim() : "Địa chỉ mặc định");
+        var rawFullAddress = !string.IsNullOrWhiteSpace(request.FullAddress)
+            ? request.FullAddress
+            : request.StreetAddress;
+
+        if (string.IsNullOrWhiteSpace(rawFullAddress))
+            throw new BadRequestException("Vui lòng nhập địa chỉ cụ thể.");
 
         var address = new Address
         {
             Id = Guid.NewGuid(),
             CustomerId = customer.Id,
             Label = string.IsNullOrWhiteSpace(request.Label) ? "Nhà" : request.Label.Trim(),
-            FullAddress = fullAddr,
+            FullAddress = rawFullAddress.Trim(),
             Ward = request.Ward?.Trim(),
             District = request.District?.Trim(),
             City = request.City?.Trim(),
@@ -106,12 +109,11 @@ public class AddressService(
         if (!string.IsNullOrWhiteSpace(request.Label))
             address.Label = request.Label.Trim();
 
-        var newFullAddr = !string.IsNullOrWhiteSpace(request.FullAddress)
-            ? request.FullAddress.Trim()
-            : (!string.IsNullOrWhiteSpace(request.StreetAddress) ? request.StreetAddress.Trim() : null);
-
-        if (!string.IsNullOrWhiteSpace(newFullAddr))
-            address.FullAddress = newFullAddr;
+        var updatedFullAddress = !string.IsNullOrWhiteSpace(request.FullAddress)
+            ? request.FullAddress
+            : request.StreetAddress;
+        if (!string.IsNullOrWhiteSpace(updatedFullAddress))
+            address.FullAddress = updatedFullAddress.Trim();
 
         if (request.Notes != null)
             address.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
