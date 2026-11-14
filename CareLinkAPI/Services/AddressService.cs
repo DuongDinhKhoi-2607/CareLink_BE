@@ -49,12 +49,19 @@ public class AddressService(
             }
         }
 
+        var rawFullAddress = !string.IsNullOrWhiteSpace(request.FullAddress)
+            ? request.FullAddress
+            : request.StreetAddress;
+
+        if (string.IsNullOrWhiteSpace(rawFullAddress))
+            throw new BadRequestException("Vui lòng nhập địa chỉ cụ thể.");
+
         var address = new Address
         {
             Id = Guid.NewGuid(),
             CustomerId = customer.Id,
             Label = string.IsNullOrWhiteSpace(request.Label) ? "Nhà" : request.Label.Trim(),
-            FullAddress = request.FullAddress.Trim(),
+            FullAddress = rawFullAddress.Trim(),
             Ward = request.Ward?.Trim(),
             District = request.District?.Trim(),
             City = request.City?.Trim(),
@@ -101,8 +108,11 @@ public class AddressService(
         if (!string.IsNullOrWhiteSpace(request.Label))
             address.Label = request.Label.Trim();
 
-        if (!string.IsNullOrWhiteSpace(request.FullAddress))
-            address.FullAddress = request.FullAddress.Trim();
+        var updatedFullAddress = !string.IsNullOrWhiteSpace(request.FullAddress)
+            ? request.FullAddress
+            : request.StreetAddress;
+        if (!string.IsNullOrWhiteSpace(updatedFullAddress))
+            address.FullAddress = updatedFullAddress.Trim();
 
         if (request.Ward != null)
             address.Ward = request.Ward.Trim();

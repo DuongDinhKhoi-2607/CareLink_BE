@@ -286,7 +286,11 @@ public class NurseProfileService(
         UserId = n.UserId,
         FullName = n.FullName,
         Phone = n.Phone,
-        AvatarUrl = n.AvatarUrl,
+        AvatarUrl = string.IsNullOrWhiteSpace(n.AvatarUrl) ||
+                    n.AvatarUrl.Contains("unsplash.com", StringComparison.OrdinalIgnoreCase) ||
+                    n.AvatarUrl.Contains("caregiver_avatar.svg", StringComparison.OrdinalIgnoreCase)
+            ? CareLinkAPI.Data.DbInitializer.ResolveVietnameseNurseAvatar(n.FullName, n.PractitionerType)
+            : n.AvatarUrl,
         Bio = n.Bio,
         EducationLevel = n.EducationLevel,
         ExperienceYears = n.ExperienceYears,

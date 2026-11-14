@@ -53,6 +53,12 @@ public class CreateBookingRequest
     /// </summary>
     public Guid? AddressId { get; set; }
 
+    /// <summary>
+    /// Địa chỉ tiếp nhận ca trực nhập trực tiếp (khi chưa có sổ địa chỉ hoặc muốn ghi đè).
+    /// </summary>
+    [StringLength(255)]
+    public string? CustomAddress { get; set; }
+
     /// <summary>Checkbox đồng ý chia sẻ tóm tắt bệnh án cho điều dưỡng.</summary>
     public bool ConsentShareMedicalRecords { get; set; } = true;
 

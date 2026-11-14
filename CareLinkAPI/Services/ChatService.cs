@@ -340,7 +340,7 @@ public class ChatService(
         }
 
         var (addressText, latitude, longitude) =
-            await ResolveAddressAsync(customerId, recipient, request.AddressId, ct);
+            await ResolveAddressAsync(customerId, recipient, request.AddressId, request.CustomAddress, ct);
 
         var totalDurationMinutes = selectedServices.Sum(s => s.DurationMinutes);
         var endUtc = startUtc.AddMinutes(totalDurationMinutes);
@@ -1063,6 +1063,7 @@ public class ChatService(
         Guid customerId,
         CareRecipient recipient,
         Guid? addressId,
+        string? customAddress,
         CancellationToken ct)
     {
         if (addressId.HasValue)
@@ -1081,13 +1082,33 @@ public class ChatService(
             return (text, address.Latitude, address.Longitude);
         }
 
-        if (string.IsNullOrWhiteSpace(recipient.Address))
+        if (!string.IsNullOrWhiteSpace(customAddress))
         {
-            throw new BadRequestException(
-                "No care address available: provide AddressId or set an address on the care recipient.");
+            var trimmed = customAddress.Trim();
+            if (string.IsNullOrWhiteSpace(recipient.Address))
+            {
+                recipient.Address = trimmed;
+                recipients.Update(recipient);
+            }
+            return (trimmed, recipient.Latitude, recipient.Longitude);
         }
 
-        return (recipient.Address, recipient.Latitude, recipient.Longitude);
+        if (!string.IsNullOrWhiteSpace(recipient.Address))
+        {
+            return (recipient.Address, recipient.Latitude, recipient.Longitude);
+        }
+
+        var customerAddresses = await addresses.GetByCustomerIdAsync(customerId, ct);
+        var fallbackAddr = customerAddresses.FirstOrDefault(a => a.IsDefault) ?? customerAddresses.FirstOrDefault();
+        if (fallbackAddr != null && !string.IsNullOrWhiteSpace(fallbackAddr.FullAddress))
+        {
+            var text = string.Join(", ", new[] { fallbackAddr.FullAddress, fallbackAddr.Ward, fallbackAddr.District, fallbackAddr.City }
+                .Where(part => !string.IsNullOrWhiteSpace(part)));
+            return (text, fallbackAddr.Latitude, fallbackAddr.Longitude);
+        }
+
+        throw new BadRequestException(
+            "No care address available: provide AddressId or set an address on the care recipient.");
     }
 
     private static ConversationResponse MapToConversationResponse(
