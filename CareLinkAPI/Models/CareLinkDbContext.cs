@@ -70,6 +70,8 @@ public partial class CareLinkDbContext : DbContext
 
     public virtual DbSet<UserActivityLog> UserActivityLogs { get; set; }
 
+    public virtual DbSet<SystemSetting> SystemSettings { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
@@ -1217,6 +1219,25 @@ public partial class CareLinkDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_user_activity_logs_user");
+        });
+
+        modelBuilder.Entity<SystemSetting>(entity =>
+        {
+            entity.HasKey(e => e.SettingKey).HasName("system_settings_pkey");
+            entity.ToTable("system_settings");
+
+            entity.Property(e => e.SettingKey).HasMaxLength(100).HasColumnName("setting_key");
+            entity.Property(e => e.SettingValue).HasColumnType("text").HasColumnName("setting_value");
+            entity.Property(e => e.DisplayName).HasMaxLength(255).HasColumnName("display_name");
+            entity.Property(e => e.Description).HasColumnType("text").HasColumnName("description");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()").HasColumnName("updated_at");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+
+            entity.HasOne(d => d.UpdatedByUser)
+                .WithMany()
+                .HasForeignKey(d => d.UpdatedBy)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_settings_updated_by");
         });
 
         OnModelCreatingPartial(modelBuilder);

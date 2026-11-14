@@ -42,7 +42,7 @@ public class PagingQuery
 /// <summary>Pay-04: nurse asks to withdraw money to a bank account.</summary>
 public class CreatePayoutRequest
 {
-    [Range(50_000, 1_000_000_000, ErrorMessage = "Số tiền rút tối thiểu là 50.000đ.")]
+    [Range(1_000, 1_000_000_000, ErrorMessage = "Số tiền rút không hợp lệ.")]
     public decimal Amount { get; set; }
 
     [Required(ErrorMessage = "Vui lòng chọn ngân hàng thụ hưởng."), StringLength(100)]

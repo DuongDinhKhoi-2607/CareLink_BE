@@ -17,7 +17,8 @@ public class WalletService(
     IUserRepository users,
     INotificationRepository notifications,
     IUnitOfWork unitOfWork,
-    ILogger<WalletService> logger) : IWalletService
+    ILogger<WalletService> logger,
+    CareLinkAPI.Services.Backoffice.ISystemSettingService? systemSettingService = null) : IWalletService
 {
     private static readonly CultureInfo ViCulture = CultureInfo.GetCultureInfo("vi-VN");
 
@@ -190,6 +191,15 @@ public class WalletService(
 
             var pending = await payouts.GetPendingTotalAsync(wallet.Id, cancellationToken);
             var available = wallet.Balance - pending;
+
+            var minPayout = systemSettingService != null
+                ? await systemSettingService.GetDecimalAsync("min_payout", 50_000m, cancellationToken)
+                : 50_000m;
+            if (request.Amount < minPayout)
+            {
+                throw new BusinessRuleException(
+                    $"Số tiền rút tối thiểu là {Money(minPayout)} theo quy định hệ thống. Vui lòng nhập số tiền hợp lệ.");
+            }
 
             if (available <= 0m || request.Amount > available)
             {

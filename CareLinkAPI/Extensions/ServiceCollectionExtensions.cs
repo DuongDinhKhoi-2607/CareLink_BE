@@ -70,6 +70,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
         services.AddScoped<IAdminNurseStatisticsService, AdminNurseStatisticsService>();
         services.AddScoped<IHandbookService, HandbookService>();
+        services.AddScoped<ISystemSettingService, SystemSettingService>();
 
         // Module 7: Payment & Wallet
         services.AddScoped<IPaymentService, PaymentService>();

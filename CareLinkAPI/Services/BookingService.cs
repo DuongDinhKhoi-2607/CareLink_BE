@@ -34,7 +34,8 @@ public class BookingService(
     INurseSearchService nurseSearchService,
     IOptions<BookingOptions> options,
     IOptions<PayOsOptions> payOsOptions,
-    ILogger<BookingService> logger) : IBookingService
+    ILogger<BookingService> logger,
+    CareLinkAPI.Services.Backoffice.ISystemSettingService? systemSettingService = null) : IBookingService
 {
     private static readonly CultureInfo ViCulture = CultureInfo.GetCultureInfo("vi-VN");
 
@@ -217,7 +218,10 @@ public class BookingService(
             : 0m;
 
         var totalPrice = baseServicesPrice + extraMinutesPrice;
-        var platformFee = _payOsOptions.PlatformFeePerBooking > 0 ? _payOsOptions.PlatformFeePerBooking : 60_000m;
+        var configuredFee = systemSettingService != null
+            ? await systemSettingService.GetDecimalAsync("platform_fee", _payOsOptions.PlatformFeePerBooking > 0 ? _payOsOptions.PlatformFeePerBooking : 60_000m, cancellationToken)
+            : (_payOsOptions.PlatformFeePerBooking > 0 ? _payOsOptions.PlatformFeePerBooking : 60_000m);
+        var platformFee = configuredFee >= 0 ? configuredFee : 60_000m;
 
         // Serializable: two customers racing for the same nurse/slot cannot both succeed.
         var bookingId = await unitOfWork.ExecuteInTransactionAsync(async () =>

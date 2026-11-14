@@ -556,3 +556,27 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON public.user_activity_
 CREATE INDEX IF NOT EXISTS idx_activity_logs_event_type ON public.user_activity_logs(event_type);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_session_id ON public.user_activity_logs(session_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_visitor_id ON public.user_activity_logs(visitor_id);
+
+-- ============================================================================
+-- 30. SYSTEM SETTINGS (CÀI ĐẶT THAM SỐ TOÀN SÀN CARELINK)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.system_settings (
+  setting_key character varying(100) NOT NULL,
+  setting_value text NOT NULL,
+  display_name character varying(255) NOT NULL,
+  description text,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_by uuid,
+  CONSTRAINT system_settings_pkey PRIMARY KEY (setting_key),
+  CONSTRAINT fk_settings_updated_by FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL
+);
+
+INSERT INTO public.system_settings (setting_key, setting_value, display_name, description)
+VALUES
+  ('platform_fee', '60000', 'Phí sàn CareLink (VNĐ)', 'Khoản phí dịch vụ cố định tính trên mỗi ca trực hoàn tất (áp dụng cho ca tạo mới).'),
+  ('min_payout', '50000', 'Hạn mức rút tiền tối thiểu (VNĐ)', 'Số dư ví khả dụng tối thiểu để Điều dưỡng có thể tạo yêu cầu rút tiền về tài khoản ngân hàng.'),
+  ('hotline', '', 'Hotline hỗ trợ 24/7', 'Số điện thoại tổng đài hỗ trợ hiển thị ở Header, Footer và nút SOS (để trống nếu đang cập nhật).'),
+  ('support_email', '', 'Email hỗ trợ khách hàng', 'Hòm thư tiếp nhận hỗ trợ và giải đáp thắc mắc dịch vụ (để trống nếu đang cập nhật).'),
+  ('privacy_email', '', 'Email quyền riêng tư & bảo mật', 'Hòm thư tiếp nhận yêu cầu về chính sách bảo mật và dữ liệu cá nhân (để trống nếu đang cập nhật).')
+ON CONFLICT (setting_key) DO NOTHING;
+
