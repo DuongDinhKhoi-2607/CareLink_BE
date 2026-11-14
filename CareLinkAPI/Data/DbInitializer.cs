@@ -335,23 +335,8 @@ public static class DbInitializer
         var name = (fullName ?? string.Empty).Trim();
         if (name.Contains("Mai Lan", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/mai-lan.jpg";
         if (name.Contains("Văn Minh", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/van-minh.jpg";
-        if (name.Contains("Lê Thị Thảo", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/le-thao.jpg";
-        if (name.Contains("Thu Thảo", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/thu-thao.jpg";
-        if (name.Contains("Hoàng Nam", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/hoang-nam.jpg";
         if (name.Contains("Kim Chi", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/kim-chi.jpg";
-        if (name.Contains("Khánh Quốc", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/khanh-quoc.jpg";
-        if (name.Contains("Tường Vy", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/tuong-vy.jpg";
-        if (name.Contains("Quốc Duy", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/van-minh.jpg";
-        if (name.Contains("Thị Hằng", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/kim-chi.jpg";
-
-        if (name.Contains("Văn ", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("Hoàng ", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("Quốc ", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("Minh", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("Nam", StringComparison.OrdinalIgnoreCase))
-        {
-            return practitionerType == 2 ? "/images/nurses/hoang-nam.jpg" : "/images/nurses/van-minh.jpg";
-        }
+        if (name.Contains("Lê Thị Thảo", StringComparison.OrdinalIgnoreCase)) return "/images/nurses/le-thao.jpg";
 
         return "/images/caregiver_avatar.svg";
     }
