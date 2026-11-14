@@ -11,7 +11,7 @@ public class UpdateUserProfileRequest
     [MaxLength(20)]
     public string? Phone { get; set; }
 
-    [Url]
+    [MaxLength(2000)]
     public string? AvatarUrl { get; set; }
 
     public DateOnly? DateOfBirth { get; set; }
