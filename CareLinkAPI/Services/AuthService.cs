@@ -78,6 +78,7 @@ public class AuthService : IAuthService
                 UserId = user.Id,
                 FullName = effectiveName,
                 Phone = effectivePhone,
+                AvatarUrl = "/images/caregiver_avatar.svg",
                 Status = (int)NurseStatus.PendingVerification,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -173,7 +174,7 @@ public class AuthService : IAuthService
                     Id = Guid.NewGuid(),
                     UserId = user.Id,
                     FullName = displayName,
-                    AvatarUrl = payload.Picture,
+                    AvatarUrl = "/images/caregiver_avatar.svg",
                     Status = (int)NurseStatus.PendingVerification,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -187,7 +188,7 @@ public class AuthService : IAuthService
                     Id = Guid.NewGuid(),
                     UserId = user.Id,
                     FullName = displayName,
-                    AvatarUrl = payload.Picture
+                    AvatarUrl = "/images/caregiver_avatar.svg",
                 };
                 _db.Customers.Add(customer);
             }
@@ -219,7 +220,7 @@ public class AuthService : IAuthService
                     Id = Guid.NewGuid(),
                     UserId = user.Id,
                     FullName = displayName,
-                    AvatarUrl = payload.Picture,
+                    AvatarUrl = "/images/caregiver_avatar.svg",
                     Status = (int)NurseStatus.PendingVerification,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -233,7 +234,7 @@ public class AuthService : IAuthService
                     Id = Guid.NewGuid(),
                     UserId = user.Id,
                     FullName = displayName,
-                    AvatarUrl = payload.Picture
+                    AvatarUrl = "/images/caregiver_avatar.svg",
                 });
                 changed = true;
             }
@@ -413,7 +414,7 @@ public class AuthService : IAuthService
                 IsActive = user.IsActive,
                 FullName = displayName ?? user.Email.Split('@')[0],
                 Phone = phone,
-                AvatarUrl = avatarUrl
+                AvatarUrl = "/images/caregiver_avatar.svg",
             }
         };
     }

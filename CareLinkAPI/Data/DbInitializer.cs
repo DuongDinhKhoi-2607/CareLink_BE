@@ -309,7 +309,7 @@ public static class DbInitializer
                 var currentAvatar = nurse.AvatarUrl ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(currentAvatar) ||
                     currentAvatar.Contains("unsplash.com", StringComparison.OrdinalIgnoreCase) ||
-                    currentAvatar.Contains("caregiver_avatar.svg", StringComparison.OrdinalIgnoreCase) ||
+                    currentAvatar.Contains("caregiver-hero.jpg", StringComparison.OrdinalIgnoreCase) ||
                     currentAvatar.Contains("pravatar.cc", StringComparison.OrdinalIgnoreCase))
                 {
                     nurse.AvatarUrl = ResolveVietnameseNurseAvatar(nurse.FullName, nurse.PractitionerType);
@@ -353,6 +353,6 @@ public static class DbInitializer
             return practitionerType == 2 ? "/images/nurses/hoang-nam.jpg" : "/images/nurses/van-minh.jpg";
         }
 
-        return practitionerType == 2 ? "/images/nurses/le-thao.jpg" : "/images/nurses/mai-lan.jpg";
+        return "/images/caregiver_avatar.svg";
     }
 }

@@ -38,6 +38,7 @@ public class UserService(
                 Id = Guid.NewGuid(),
                 UserId = user.Id,
                 FullName = user.Email.Split('@')[0],
+                AvatarUrl = "/images/caregiver_avatar.svg",
                 Status = (int)NurseStatus.PendingVerification,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
