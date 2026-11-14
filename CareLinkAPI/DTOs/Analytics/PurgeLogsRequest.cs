@@ -24,3 +24,4 @@ public class PurgeLogsRequest
     /// </summary>
     public bool PageViewsOnly { get; set; } = false;
 }
+

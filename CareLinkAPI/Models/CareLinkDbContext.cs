@@ -126,6 +126,8 @@ public partial class CareLinkDbContext : DbContext
             entity.Property(e => e.Ward)
                 .HasColumnType("character varying")
                 .HasColumnName("ward");
+            entity.Property(e => e.Notes)
+                .HasColumnName("notes");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Addresses)
                 .HasForeignKey(d => d.CustomerId)

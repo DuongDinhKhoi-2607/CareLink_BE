@@ -19,6 +19,8 @@ public partial class Address
 
     public string? City { get; set; }
 
+    public string? Notes { get; set; }
+
     public decimal? Latitude { get; set; }
 
     public decimal? Longitude { get; set; }

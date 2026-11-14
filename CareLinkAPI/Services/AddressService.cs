@@ -49,15 +49,20 @@ public class AddressService(
             }
         }
 
+        var fullAddr = !string.IsNullOrWhiteSpace(request.FullAddress)
+            ? request.FullAddress.Trim()
+            : (!string.IsNullOrWhiteSpace(request.StreetAddress) ? request.StreetAddress.Trim() : "Địa chỉ mặc định");
+
         var address = new Address
         {
             Id = Guid.NewGuid(),
             CustomerId = customer.Id,
             Label = string.IsNullOrWhiteSpace(request.Label) ? "Nhà" : request.Label.Trim(),
-            FullAddress = request.FullAddress.Trim(),
+            FullAddress = fullAddr,
             Ward = request.Ward?.Trim(),
             District = request.District?.Trim(),
             City = request.City?.Trim(),
+            Notes = request.Notes?.Trim(),
             Latitude = request.Latitude,
             Longitude = request.Longitude,
             IsDefault = shouldBeDefault,
@@ -101,8 +106,15 @@ public class AddressService(
         if (!string.IsNullOrWhiteSpace(request.Label))
             address.Label = request.Label.Trim();
 
-        if (!string.IsNullOrWhiteSpace(request.FullAddress))
-            address.FullAddress = request.FullAddress.Trim();
+        var newFullAddr = !string.IsNullOrWhiteSpace(request.FullAddress)
+            ? request.FullAddress.Trim()
+            : (!string.IsNullOrWhiteSpace(request.StreetAddress) ? request.StreetAddress.Trim() : null);
+
+        if (!string.IsNullOrWhiteSpace(newFullAddr))
+            address.FullAddress = newFullAddr;
+
+        if (request.Notes != null)
+            address.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
 
         if (request.Ward != null)
             address.Ward = request.Ward.Trim();
@@ -181,6 +193,7 @@ public class AddressService(
         Ward = a.Ward,
         District = a.District,
         City = a.City,
+        Notes = a.Notes,
         Latitude = a.Latitude,
         Longitude = a.Longitude,
         IsDefault = a.IsDefault,

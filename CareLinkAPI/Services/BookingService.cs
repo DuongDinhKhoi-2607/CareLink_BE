@@ -946,8 +946,20 @@ public class BookingService(
                 throw new ForbiddenException("The address does not belong to you.");
             }
 
-            var text = string.Join(", ", new[] { address.FullAddress, address.Ward, address.District, address.City }
-                .Where(part => !string.IsNullOrWhiteSpace(part)));
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(address.FullAddress))
+                parts.Add(address.FullAddress.Trim());
+
+            if (!string.IsNullOrWhiteSpace(address.Ward) && (string.IsNullOrWhiteSpace(address.FullAddress) || !address.FullAddress.Contains(address.Ward, StringComparison.OrdinalIgnoreCase)))
+                parts.Add(address.Ward.Trim());
+
+            if (!string.IsNullOrWhiteSpace(address.District) && (string.IsNullOrWhiteSpace(address.FullAddress) || !address.FullAddress.Contains(address.District, StringComparison.OrdinalIgnoreCase)))
+                parts.Add(address.District.Trim());
+
+            if (!string.IsNullOrWhiteSpace(address.City) && (string.IsNullOrWhiteSpace(address.FullAddress) || !address.FullAddress.Contains(address.City, StringComparison.OrdinalIgnoreCase)))
+                parts.Add(address.City.Trim());
+
+            var text = string.Join(", ", parts);
 
             return (text, address.Latitude, address.Longitude);
         }

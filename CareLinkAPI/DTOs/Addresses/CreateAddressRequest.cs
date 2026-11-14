@@ -7,9 +7,11 @@ public class CreateAddressRequest
     [MaxLength(50)]
     public string Label { get; set; } = "Nhà";
 
-    [Required]
     [MaxLength(255)]
-    public string FullAddress { get; set; } = null!;
+    public string? FullAddress { get; set; }
+
+    [MaxLength(255)]
+    public string? StreetAddress { get; set; }
 
     [MaxLength(100)]
     public string? Ward { get; set; }
@@ -19,6 +21,9 @@ public class CreateAddressRequest
 
     [MaxLength(100)]
     public string? City { get; set; }
+
+    [MaxLength(500)]
+    public string? Notes { get; set; }
 
     [Range(-90.0, 90.0)]
     public decimal? Latitude { get; set; }
